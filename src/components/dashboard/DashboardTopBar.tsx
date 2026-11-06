@@ -49,7 +49,8 @@ export const DashboardTopBar: React.FC<DashboardTopBarProps> = ({
         return 'Monitoring';
       case 'slurry-preparation':
       case 'mineral-dosing':
-        return 'Mineral & Dosing';
+      case 'mineral':
+        return 'Mineral';
       case 'dosing':
         return 'Dosing';
       case 'carbon-removal':

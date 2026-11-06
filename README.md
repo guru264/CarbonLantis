@@ -101,7 +101,7 @@ When authorized operators log in, the enterprise platform displays a **persisten
    Overall platform overview, asset deployments table, monitoring statistics, system status, and operational alerts.
 2. **Monitoring** (`/dashboard?tab=monitoring`):
    Real-time and historical sensor telemetry matrix (208 nodes), RTK GPS vessel tracking and geofencing, active and past dosing cycles, and one-click certified data export center (CSV/JSON).
-3. **Mineral & Dosing** (`/dashboard?tab=mineral-dosing`):
+3. **Mineral** (`/dashboard?tab=mineral`):
    Mineral feedstock stockpiles (CaSiO₃ Wollastonite & Mg(OH)₂), slurry preparation and continuous mixing tanks, closed-loop PID dosing configurations, and peristaltic pump actuation controls.
 4. **Carbon Removal** (`/dashboard?tab=carbon-removal`):
    Carbonate chemistry calculations (DIC, Total Alkalinity, pCO₂ disequilibrium, saturation indices \(\Omega_{\text{calcite}}\)), gross vs net creditable CDR ledger, Monte Carlo uncertainty assessment (±4.2%), and audit-ready ISO 14064-2 MRV report packages.

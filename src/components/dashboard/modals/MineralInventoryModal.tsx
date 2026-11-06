@@ -17,8 +17,8 @@ export const MineralInventoryModal: React.FC<MineralInventoryModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'inventory' | 'add'>('inventory');
   const [batchNumber, setBatchNumber] = useState('');
-  const [mineralName, setMineralName] = useState('Calcium Silicate (Wollastonite Micro-powder)');
-  const [chemicalFormula, setChemicalFormula] = useState('CaSiO3');
+  const [mineralName, setMineralName] = useState('Magnesium Hydroxide (Mg(OH)₂)');
+  const [chemicalFormula, setChemicalFormula] = useState('Mg(OH)2');
   const [stockpileTons, setStockpileTons] = useState('50');
   const [supplier, setSupplier] = useState('Deccan GeoMinerals Ltd');
   const [purityPct, setPurityPct] = useState('98.5');
@@ -228,17 +228,23 @@ export const MineralInventoryModal: React.FC<MineralInventoryModalProps> = ({
                   </label>
                   <select
                     value={mineralName}
-                    onChange={(e) => setMineralName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMineralName(val);
+                      if (val.includes('Mg(OH)')) setChemicalFormula('Mg(OH)2');
+                      else if (val.includes('CaCO')) setChemicalFormula('CaCO3');
+                      else if (val.includes('Ca(OH)')) setChemicalFormula('Ca(OH)2');
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
                   >
-                    <option value="Calcium Silicate (Wollastonite Micro-powder)">
-                      Calcium Silicate (CaSiO3)
+                    <option value="Magnesium Hydroxide (Mg(OH)₂)">
+                      Magnesium Hydroxide (Mg(OH)₂)
                     </option>
-                    <option value="Magnesium Hydroxide Slurry Feedstock">
-                      Magnesium Hydroxide (Mg(OH)2)
+                    <option value="Calcium Carbonate (CaCO₃)">
+                      Calcium Carbonate (CaCO₃)
                     </option>
-                    <option value="Ultrafine Calcium Carbonate (Calcite)">
-                      Calcium Carbonate (CaCO3)
+                    <option value="Calcium Hydroxide (Ca(OH)₂)">
+                      Calcium Hydroxide (Ca(OH)₂)
                     </option>
                   </select>
                 </div>

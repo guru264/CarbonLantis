@@ -70,6 +70,7 @@ export type DashboardTabId =
   | 'monitoring'
   | 'slurry-preparation'
   | 'mineral-dosing'
+  | 'mineral'
   | 'dosing'
   | 'carbon-removal'
   | 'users'

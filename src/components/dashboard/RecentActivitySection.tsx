@@ -36,7 +36,7 @@ export const recentOperationalEvents: OperationalEvent[] = [
     type: 'cycle_completed',
     timestamp: '35 mins ago',
     title: 'Dosing Cycle #148 Completed on MDP-01',
-    detail: 'Delivered 1,083 kg Calcium Silicate slurry at average rate 180.5 kg/hr. Mean plume pH 8.28.',
+    detail: 'Delivered 1,083 kg Magnesium Hydroxide slurry at average rate 180.5 kg/hr. Mean plume pH 8.28.',
     reference: 'Cycle #148 (MDP-01)',
     operator: 'Dr. Elena Vance'
   },
@@ -54,7 +54,7 @@ export const recentOperationalEvents: OperationalEvent[] = [
     type: 'slurry_prepared',
     timestamp: '2 hours ago',
     title: 'Slurry Batch #SLR-442 Prepared in Mixer Tank 1',
-    detail: '4,800 Liters wet-mixed to 1.182 g/cm³ density using Wollastonite Batch WOL-2026-08.',
+    detail: '4,800 Liters wet-mixed to 1.182 g/cm³ density using Calcium Hydroxide Batch CAH-2026-01.',
     reference: 'Batch #SLR-442',
     operator: 'Marcus Chen'
   },
@@ -62,9 +62,9 @@ export const recentOperationalEvents: OperationalEvent[] = [
     id: 'evt-05',
     type: 'mineral_received',
     timestamp: '4 hours ago',
-    title: 'Mineral Batch WOL-2026-08 Received & Silo Deposited',
-    detail: '148.5 Tons Calcium Silicate (CaSiO₃) received from Deccan GeoMinerals with 98.4% assay purity certificate.',
-    reference: 'Batch #WOL-2026-08',
+    title: 'Mineral Batch MGH-2026-03 Received & Silo Deposited',
+    detail: '148.5 Tons Magnesium Hydroxide (Mg(OH)₂) received from Coromandel Coastal Marine Reagents with 99.1% assay purity certificate.',
+    reference: 'Batch #MGH-2026-03',
     operator: 'Logistics Desk'
   },
   {

@@ -20,7 +20,8 @@ import {
   Clock,
   ArrowDownRight,
   ArrowUpRight,
-  Filter
+  Filter,
+  Leaf
 } from 'lucide-react';
 import { useSlurryDosing } from '../../../context/SlurryDosingContext';
 
@@ -56,7 +57,9 @@ export interface MineralBatchFormState {
   mineralType: string;
   supplier: string;
   quantityKg: number | '';
-  origin: string;
+  originLat: number | '';
+  originLng: number | '';
+  origin?: string;
   sourcingDate: string;
   sourcingEvidence: string;
 
@@ -64,16 +67,18 @@ export interface MineralBatchFormState {
   purityPct: number | '';
   grainSizeMicrons: number | '';
   safetyStatus: string;
-  heavyMetalsAssay: string;
-  testingLab: string;
   screeningEvidence: string;
 
   // Phase 3: Transportation
-  sourceLocation: string;
-  destination: string;
+  sourceLat: number | '';
+  sourceLng: number | '';
+  destLat: number | '';
+  destLng: number | '';
   distanceKm: number | '';
   vehicleNumber: string;
-  driverName: string;
+  mileage: number | '';
+  fuelType: string;
+  emissionFactor: number | '';
   transportEvidence: string;
 
   // Phase 4: Slurry Preparation
@@ -96,22 +101,22 @@ const INITIAL_TANKS: TankStorageData[] = [
     batches: [
       {
         batchId: 'MB-2026-001',
-        mineralType: 'Olivine (Mg₂SiO₄)',
+        mineralType: 'Magnesium Hydroxide (Mg(OH)₂)',
         mineralMassKg: 240,
         waterQuantityLiters: 290,
         slurryVolumeLiters: 380,
-        supplier: 'Deccan Minerals Corp',
-        origin: 'Salem Ultramafic Reach, TN',
+        supplier: 'Coromandel Coastal Marine Reagents',
+        origin: 'Salem Coastal Processing, TN',
         dateAdded: '28 Oct 2026, 09:15',
         status: 'MRV Certified'
       },
       {
         batchId: 'MB-2026-002',
-        mineralType: 'Calcium Silicate (CaSiO₃)',
+        mineralType: 'Calcium Carbonate (CaCO₃)',
         mineralMassKg: 170,
         waterQuantityLiters: 205,
         slurryVolumeLiters: 270,
-        supplier: 'AP Silicates Pvt Ltd',
+        supplier: 'Andhra Mineral Corporation',
         origin: 'Kadapa Sourcing Mine, AP',
         dateAdded: '30 Oct 2026, 14:40',
         status: 'MRV Certified'
@@ -130,11 +135,11 @@ const INITIAL_TANKS: TankStorageData[] = [
     batches: [
       {
         batchId: 'MB-2026-003',
-        mineralType: 'Basalt Mineral Dust (< 35µm)',
+        mineralType: 'Calcium Hydroxide (Ca(OH)₂)',
         mineralMassKg: 190,
         waterQuantityLiters: 230,
         slurryVolumeLiters: 300,
-        supplier: 'Eastern Ghats Mining Hub',
+        supplier: 'Deccan GeoMinerals Ltd',
         origin: 'Visakhapatnam Quarry Reach, AP',
         dateAdded: '31 Oct 2026, 11:20',
         status: 'MRV Certified'
@@ -161,6 +166,8 @@ export const MineralDosingTab: React.FC = () => {
     mineralType: '',
     supplier: '',
     quantityKg: '',
+    originLat: '',
+    originLng: '',
     origin: '',
     sourcingDate: '',
     sourcingEvidence: '',
@@ -169,16 +176,18 @@ export const MineralDosingTab: React.FC = () => {
     purityPct: '',
     grainSizeMicrons: '',
     safetyStatus: '',
-    heavyMetalsAssay: '',
-    testingLab: '',
     screeningEvidence: '',
 
     // Phase 3: Transportation (empty by default)
-    sourceLocation: '',
-    destination: '',
+    sourceLat: '',
+    sourceLng: '',
+    destLat: '',
+    destLng: '',
     distanceKm: '',
     vehicleNumber: '',
-    driverName: '',
+    mileage: '',
+    fuelType: '',
+    emissionFactor: '',
     transportEvidence: '',
 
     // Phase 4: Slurry Preparation (empty by default)
@@ -205,7 +214,8 @@ export const MineralDosingTab: React.FC = () => {
     form.mineralType.trim() !== '' &&
     form.supplier.trim() !== '' &&
     Number(form.quantityKg) > 0 &&
-    form.origin.trim() !== '' &&
+    form.originLat !== '' &&
+    form.originLng !== '' &&
     form.sourcingDate.trim() !== '' &&
     form.sourcingEvidence.trim() !== '';
 
@@ -213,16 +223,18 @@ export const MineralDosingTab: React.FC = () => {
     Number(form.purityPct) > 0 &&
     Number(form.grainSizeMicrons) > 0 &&
     form.safetyStatus.trim() !== '' &&
-    form.heavyMetalsAssay.trim() !== '' &&
-    form.testingLab.trim() !== '' &&
     form.screeningEvidence.trim() !== '';
 
   const isPhase3Valid =
-    form.sourceLocation.trim() !== '' &&
-    form.destination.trim() !== '' &&
+    form.sourceLat !== '' &&
+    form.sourceLng !== '' &&
+    form.destLat !== '' &&
+    form.destLng !== '' &&
     Number(form.distanceKm) > 0 &&
     form.vehicleNumber.trim() !== '' &&
-    form.driverName.trim() !== '' &&
+    Number(form.mileage) > 0 &&
+    form.fuelType.trim() !== '' &&
+    Number(form.emissionFactor) > 0 &&
     form.transportEvidence.trim() !== '';
 
   const isPhase4Valid =
@@ -234,11 +246,13 @@ export const MineralDosingTab: React.FC = () => {
   // Next / Back Navigation Handlers
   const handleNextPhase = () => {
     if (currentPhase === 1 && isPhase1Valid) {
-      // Sync mineral mass into Phase 4 and source location into Phase 3 if not already set
+      // Sync mineral mass into Phase 4 and GPS coordinates into Phase 3 if not already set
       setForm((prev) => ({
         ...prev,
         mineralMassKg: prev.mineralMassKg !== '' ? prev.mineralMassKg : prev.quantityKg,
-        sourceLocation: prev.sourceLocation !== '' ? prev.sourceLocation : prev.origin
+        sourceLat: prev.sourceLat !== '' ? prev.sourceLat : prev.originLat,
+        sourceLng: prev.sourceLng !== '' ? prev.sourceLng : prev.originLng,
+        origin: prev.originLat !== '' && prev.originLng !== '' ? `${prev.originLat}, ${prev.originLng}` : prev.origin
       }));
       setCurrentPhase(2);
     } else if (currentPhase === 2 && isPhase2Valid) {
@@ -265,7 +279,7 @@ export const MineralDosingTab: React.FC = () => {
       waterQuantityLiters: waterLiters,
       slurryVolumeLiters: calculatedSlurryVolume,
       supplier: form.supplier,
-      origin: form.origin,
+      origin: form.originLat !== '' && form.originLng !== '' ? `${form.originLat}, ${form.originLng}` : 'GPS Verified Location',
       dateAdded: 'Today, Just now',
       status: 'MRV Certified'
     };
@@ -286,19 +300,23 @@ export const MineralDosingTab: React.FC = () => {
       supplier: '',
       quantityKg: '',
       origin: '',
+      originLat: '',
+      originLng: '',
       sourcingDate: '',
       sourcingEvidence: '',
       purityPct: '',
       grainSizeMicrons: '',
       safetyStatus: '',
-      heavyMetalsAssay: '',
-      testingLab: '',
       screeningEvidence: '',
-      sourceLocation: '',
-      destination: '',
+      sourceLat: '',
+      sourceLng: '',
+      destLat: '',
+      destLng: '',
       distanceKm: '',
       vehicleNumber: '',
-      driverName: '',
+      mileage: '',
+      fuelType: '',
+      emissionFactor: '',
       transportEvidence: '',
       mineralMassKg: '',
       waterQuantityLiters: '',
@@ -476,11 +494,9 @@ export const MineralDosingTab: React.FC = () => {
                     className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all cursor-pointer"
                   >
                     <option value="">Select mineral feedstock...</option>
-                    <option value="Olivine (Mg₂SiO₄ - High Purity)">Olivine (Mg₂SiO₄ - High Purity Ultramafic)</option>
-                    <option value="Calcium Silicate (CaSiO₃ - Wollastonite)">Calcium Silicate (CaSiO₃ - Wollastonite)</option>
-                    <option value="Basalt Mineral Dust (< 35µm)">Basalt Mineral Dust (&lt; 35µm)</option>
                     <option value="Magnesium Hydroxide (Mg(OH)₂)">Magnesium Hydroxide (Mg(OH)₂)</option>
-                    <option value="Limestone / Quicklime (CaCO₃ / CaO)">Limestone / Quicklime (CaCO₃ / CaO)</option>
+                    <option value="Calcium Carbonate (CaCO₃)">Calcium Carbonate (CaCO₃)</option>
+                    <option value="Calcium Hydroxide (Ca(OH)₂)">Calcium Hydroxide (Ca(OH)₂)</option>
                   </select>
                 </div>
 
@@ -522,21 +538,43 @@ export const MineralDosingTab: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 5. Origin / Quarry Location */}
+                {/* 5. Sourcing Origin Latitude */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Quarry / Sourcing Origin <span className="text-rose-500">*</span>
+                    Sourcing Origin Latitude <span className="text-rose-500">*</span>
                   </label>
                   <input
-                    type="text"
-                    value={form.origin}
-                    onChange={(e) => setForm({ ...form, origin: e.target.value, sourceLocation: e.target.value })}
+                    type="number"
+                    step="any"
+                    value={form.originLat}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
+                      setForm({ ...form, originLat: val });
+                    }}
                     className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
-                    placeholder="e.g. Salem Ultramafic Reach, TN"
+                    placeholder="e.g. 11.6643"
                   />
                 </div>
 
-                {/* 6. Sourcing Date */}
+                {/* 6. Sourcing Origin Longitude */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Sourcing Origin Longitude <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={form.originLng}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
+                      setForm({ ...form, originLng: val });
+                    }}
+                    className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
+                    placeholder="e.g. 78.1460"
+                  />
+                </div>
+
+                {/* 7. Sourcing Date */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Delivery / Receipt Date <span className="text-rose-500">*</span>
@@ -625,7 +663,7 @@ export const MineralDosingTab: React.FC = () => {
                     Phase 2: Mineral Quality & Safety Screening
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Record laboratory purity, particle grain size (D50), non-toxic safety status, and XRD test certificates.
+                    Record laboratory purity, particle grain size (D50), safety confirmation, and test certificates.
                   </p>
                 </div>
                 <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
@@ -683,10 +721,10 @@ export const MineralDosingTab: React.FC = () => {
                   </span>
                 </div>
 
-                {/* 3. Safety Status */}
+                {/* 3. Safety */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Safety & Toxicological Status <span className="text-rose-500">*</span>
+                    Safety <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={form.safetyStatus}
@@ -694,38 +732,9 @@ export const MineralDosingTab: React.FC = () => {
                     className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all cursor-pointer"
                   >
                     <option value="">Select safety status...</option>
-                    <option value="Passed - Non-toxic & MRV Certified">Passed - Non-toxic & MRV Certified</option>
-                    <option value="Passed - Standard Alkaline Grade">Passed - Standard Alkaline Grade</option>
-                    <option value="Pending Secondary ICP-OES Review">Pending Secondary ICP-OES Review</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
                   </select>
-                </div>
-
-                {/* 4. Heavy Metal Assay */}
-                <div className="lg:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Heavy Metals Concentration (Cr / Ni / Pb) <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.heavyMetalsAssay}
-                    onChange={(e) => setForm({ ...form, heavyMetalsAssay: e.target.value })}
-                    className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
-                    placeholder="e.g. Cr < 0.02 ppm, Ni < 0.01 ppm (Well below limits)"
-                  />
-                </div>
-
-                {/* 5. Testing Lab */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Independent Testing Laboratory <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.testingLab}
-                    onChange={(e) => setForm({ ...form, testingLab: e.target.value })}
-                    className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
-                    placeholder="e.g. Apex Geochemical Testing Labs Ltd"
-                  />
                 </div>
               </div>
 
@@ -813,42 +822,46 @@ export const MineralDosingTab: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* 1. Source Location */}
+                {/* 1. Dispatch Source Latitude */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Dispatch Source Location <span className="text-rose-500">*</span>
+                    Dispatch Source Latitude <span className="text-rose-500">*</span>
                   </label>
                   <input
-                    type="text"
-                    value={form.sourceLocation}
-                    onChange={(e) => setForm({ ...form, sourceLocation: e.target.value })}
+                    type="number"
+                    step="any"
+                    value={form.sourceLat}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
+                      setForm({ ...form, sourceLat: val });
+                    }}
                     className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
-                    placeholder="e.g. Salem Sourcing Hub, TN"
+                    placeholder="e.g. 11.6643"
                   />
                 </div>
 
-                {/* 2. Destination */}
+                {/* 2. Dispatch Source Longitude */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Depot Destination <span className="text-rose-500">*</span>
+                    Dispatch Source Longitude <span className="text-rose-500">*</span>
                   </label>
-                  <select
-                    value={form.destination}
-                    onChange={(e) => setForm({ ...form, destination: e.target.value })}
-                    className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all cursor-pointer"
-                  >
-                    <option value="">Select depot destination...</option>
-                    <option value="Kesinapalli Slurry Dosing Depot (Godavari Delta Reach)">Kesinapalli Slurry Dosing Depot (Godavari Delta Reach)</option>
-                    <option value="Rajahmundry Barrage Staging Yard">Rajahmundry Barrage Staging Yard</option>
-                    <option value="Nidamanuru River Wharf Hub">Nidamanuru River Wharf Hub</option>
-                    <option value="Dowleswaram Maintenance Station">Dowleswaram Maintenance Station</option>
-                  </select>
+                  <input
+                    type="number"
+                    step="any"
+                    value={form.sourceLng}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
+                      setForm({ ...form, sourceLng: val });
+                    }}
+                    className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
+                    placeholder="e.g. 78.1460"
+                  />
                 </div>
 
-                {/* 3. Distance (km) */}
+                {/* 3. Total Transit Distance (km) */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Transit Distance (km) <span className="text-rose-500">*</span>
+                    Total Transit Distance (km) <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -865,15 +878,54 @@ export const MineralDosingTab: React.FC = () => {
                   </div>
                   {Number(form.distanceKm) > 0 && (
                     <span className="text-[10px] text-slate-500 block mt-1">
-                      Est. transport CO₂ footprint: ~{(Number(form.distanceKm) * 0.11).toFixed(1)} kg CO₂
+                      Est. transport CO₂ footprint: ~
+                      {Number(form.mileage) > 0 && Number(form.emissionFactor) > 0
+                        ? ((Number(form.distanceKm) / Number(form.mileage)) * Number(form.emissionFactor)).toFixed(1)
+                        : (Number(form.distanceKm) * 0.11).toFixed(1)} kg CO₂
                     </span>
                   )}
                 </div>
 
-                {/* 4. Vehicle / Carrier */}
+                {/* 4. Depot Destination Latitude */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Carrier / Vehicle Reg. No. <span className="text-rose-500">*</span>
+                    Depot Destination Latitude <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={form.destLat}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
+                      setForm({ ...form, destLat: val });
+                    }}
+                    className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
+                    placeholder="e.g. 16.5412"
+                  />
+                </div>
+
+                {/* 5. Depot Destination Longitude */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Depot Destination Longitude <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={form.destLng}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Number(e.target.value);
+                      setForm({ ...form, destLng: val });
+                    }}
+                    className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
+                    placeholder="e.g. 81.9125"
+                  />
+                </div>
+
+                {/* 6. Vehicle Reg. No. */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Vehicle Reg. No. <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -884,18 +936,76 @@ export const MineralDosingTab: React.FC = () => {
                   />
                 </div>
 
-                {/* 5. Driver / Logistics Lead */}
-                <div className="lg:col-span-2">
+                {/* 7. Fuel Type */}
+                <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Dispatcher / Logistics Driver <span className="text-rose-500">*</span>
+                    Fuel Type <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={form.driverName}
-                    onChange={(e) => setForm({ ...form, driverName: e.target.value })}
-                    className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
-                    placeholder="e.g. R. Narayana (Logistics Lead)"
-                  />
+                  <select
+                    value={form.fuelType}
+                    onChange={(e) => {
+                      const selected = e.target.value;
+                      let defaultFactor: number | '' = '';
+                      if (selected === 'Diesel') defaultFactor = 2.68;
+                      else if (selected === 'Petrol') defaultFactor = 2.31;
+                      else if (selected === 'CNG') defaultFactor = 2.75;
+                      else if (selected === 'EV') defaultFactor = 0.45;
+                      setForm({
+                        ...form,
+                        fuelType: selected,
+                        emissionFactor: form.emissionFactor !== '' ? form.emissionFactor : defaultFactor
+                      });
+                    }}
+                    className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all cursor-pointer"
+                  >
+                    <option value="">Select fuel type...</option>
+                    <option value="Diesel">Diesel</option>
+                    <option value="Petrol">Petrol</option>
+                    <option value="CNG">CNG</option>
+                    <option value="EV">EV</option>
+                  </select>
+                </div>
+
+                {/* 8. Mileage */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Mileage <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      value={form.mileage}
+                      onChange={(e) => setForm({ ...form, mileage: e.target.value === '' ? '' : Number(e.target.value) })}
+                      className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 pr-16 focus:bg-white focus:border-blue-500 outline-none transition-all"
+                      placeholder="e.g. 5.5"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-mono text-slate-400 pointer-events-none">
+                      {form.fuelType === 'EV' ? 'km/kWh' : form.fuelType === 'CNG' ? 'km/kg' : 'km/L'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 9. Emission Factor (in kg/CO2) */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Emission Factor (in kg/CO₂) <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.emissionFactor}
+                      onChange={(e) => setForm({ ...form, emissionFactor: e.target.value === '' ? '' : Number(e.target.value) })}
+                      className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 pr-20 focus:bg-white focus:border-blue-500 outline-none transition-all"
+                      placeholder="e.g. 2.68"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-mono text-slate-400 pointer-events-none">
+                      kg CO₂/unit
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -958,6 +1068,47 @@ export const MineralDosingTab: React.FC = () => {
                       </button>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* Total Transport Emissions Summary Card */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                    <Leaf className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      Total Transport Emissions
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      {Number(form.distanceKm) > 0 && Number(form.mileage) > 0 && Number(form.emissionFactor) > 0 ? (
+                        <span>
+                          Formula: ({form.distanceKm} km ÷ {form.mileage} {form.fuelType === 'EV' ? 'km/kWh' : form.fuelType === 'CNG' ? 'km/kg' : 'km/L'}) × {form.emissionFactor} kg CO₂
+                        </span>
+                      ) : (
+                        <span>Calculated dynamically from distance, mileage, and fuel emission factor</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="sm:text-right shrink-0">
+                  <div className="text-xl font-black text-slate-900 font-sans tracking-tight">
+                    {Number(form.distanceKm) > 0 && Number(form.mileage) > 0 && Number(form.emissionFactor) > 0 ? (
+                      <>
+                        {((Number(form.distanceKm) / Number(form.mileage)) * Number(form.emissionFactor)).toFixed(2)}{' '}
+                        <span className="text-xs font-semibold text-slate-500">kg CO₂</span>
+                      </>
+                    ) : (
+                      <span className="text-sm font-semibold text-slate-400">0.00 kg CO₂</span>
+                    )}
+                  </div>
+                  {Number(form.distanceKm) > 0 && Number(form.mileage) > 0 && Number(form.emissionFactor) > 0 && (
+                    <div className="text-[11px] font-semibold text-emerald-600">
+                      ≈ {(((Number(form.distanceKm) / Number(form.mileage)) * Number(form.emissionFactor)) / 1000).toFixed(4)} t CO₂ (Scope 3)
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1602,4 +1753,5 @@ export const MineralDosingTab: React.FC = () => {
 };
 
 export const SlurryPreparationTab = MineralDosingTab;
+export const MineralTab = MineralDosingTab;
 

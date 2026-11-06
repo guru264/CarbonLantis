@@ -76,22 +76,22 @@ const INITIAL_TANKS: TankStorageData[] = [
     batches: [
       {
         batchId: 'MB-2026-001',
-        mineralType: 'Olivine (Mg₂SiO₄)',
+        mineralType: 'Magnesium Hydroxide (Mg(OH)₂)',
         mineralMassKg: 240,
         waterQuantityLiters: 290,
         slurryVolumeLiters: 380,
-        supplier: 'Deccan Minerals Corp',
-        origin: 'Salem Ultramafic Reach, TN',
+        supplier: 'Coromandel Coastal Marine Reagents',
+        origin: 'Salem Coastal Processing, TN',
         dateAdded: '28 Oct 2026, 09:15',
         status: 'MRV Certified'
       },
       {
         batchId: 'MB-2026-002',
-        mineralType: 'Calcium Silicate (CaSiO₃)',
+        mineralType: 'Calcium Carbonate (CaCO₃)',
         mineralMassKg: 170,
         waterQuantityLiters: 205,
         slurryVolumeLiters: 270,
-        supplier: 'AP Silicates Pvt Ltd',
+        supplier: 'Andhra Mineral Corporation',
         origin: 'Kadapa Sourcing Mine, AP',
         dateAdded: '30 Oct 2026, 14:40',
         status: 'MRV Certified'
@@ -110,11 +110,11 @@ const INITIAL_TANKS: TankStorageData[] = [
     batches: [
       {
         batchId: 'MB-2026-003',
-        mineralType: 'Basalt Mineral Dust (< 35µm)',
+        mineralType: 'Calcium Hydroxide (Ca(OH)₂)',
         mineralMassKg: 190,
         waterQuantityLiters: 230,
         slurryVolumeLiters: 300,
-        supplier: 'Eastern Ghats Mining Hub',
+        supplier: 'Deccan GeoMinerals Ltd',
         origin: 'Visakhapatnam Quarry Reach, AP',
         dateAdded: '31 Oct 2026, 11:20',
         status: 'MRV Certified'
@@ -140,7 +140,7 @@ const INITIAL_SLURRY_EVENTS: SlurryHistoryEvent[] = [
     timestamp: '30 Oct 2026, 14:40',
     type: 'BATCH_CREATED',
     title: 'Slurry Batch MB-2026-002 Loaded',
-    description: 'Prepared 270 L Calcium Silicate slurry loaded into Tank T001',
+    description: 'Prepared 270 L Calcium Carbonate slurry loaded into Tank T001',
     tankId: 'T001',
     volumeDeltaLiters: 270,
     batchId: 'MB-2026-002'
@@ -150,7 +150,7 @@ const INITIAL_SLURRY_EVENTS: SlurryHistoryEvent[] = [
     timestamp: '28 Oct 2026, 09:15',
     type: 'BATCH_CREATED',
     title: 'Slurry Batch MB-2026-001 Loaded',
-    description: 'Prepared 380 L Olivine slurry loaded into Tank T001',
+    description: 'Prepared 380 L Magnesium Hydroxide slurry loaded into Tank T001',
     tankId: 'T001',
     volumeDeltaLiters: 380,
     batchId: 'MB-2026-001'
@@ -160,7 +160,7 @@ const INITIAL_SLURRY_EVENTS: SlurryHistoryEvent[] = [
     timestamp: '27 Oct 2026, 16:30',
     type: 'BATCH_CREATED',
     title: 'Slurry Batch MB-2026-003 Loaded',
-    description: 'Prepared 300 L Basalt mineral slurry loaded into Tank T002',
+    description: 'Prepared 300 L Calcium Hydroxide slurry loaded into Tank T002',
     tankId: 'T002',
     volumeDeltaLiters: 300,
     batchId: 'MB-2026-003'
@@ -174,7 +174,7 @@ const INITIAL_DOSING_TRIPS: DosingTripRecord[] = [
     assetName: 'AquaDrone_MVP_001',
     tankId: 'T001',
     batchId: 'MB-2026-001',
-    mineralType: 'Olivine (Mg₂SiO₄)',
+    mineralType: 'Magnesium Hydroxide (Mg(OH)₂)',
     quantityLiters: 220,
     catchmentReach: 'Kesinapalli Canal Reach 1 (Godavari Delta)',
     dosingRateLPerHr: 8.5,
@@ -191,7 +191,7 @@ const INITIAL_DOSING_TRIPS: DosingTripRecord[] = [
     assetName: 'AquaDrone_DOS_002',
     tankId: 'T002',
     batchId: 'MB-2026-003',
-    mineralType: 'Basalt Mineral Dust (< 35µm)',
+    mineralType: 'Calcium Hydroxide (Ca(OH)₂)',
     quantityLiters: 180,
     catchmentReach: 'Nidamanuru Reach 2 (Mid-river transect)',
     dosingRateLPerHr: 9.2,
@@ -208,7 +208,7 @@ const INITIAL_DOSING_TRIPS: DosingTripRecord[] = [
     assetName: 'AquaDrone_DWN_003',
     tankId: 'T001',
     batchId: 'MB-2026-002',
-    mineralType: 'Calcium Silicate (CaSiO₃)',
+    mineralType: 'Calcium Carbonate (CaCO₃)',
     quantityLiters: 200,
     catchmentReach: 'Dowleswaram Barrage Outfall Reach',
     dosingRateLPerHr: 7.8,

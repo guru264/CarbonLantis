@@ -205,11 +205,10 @@ export const CarbonRemovalTab: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <strong className="text-sm font-bold text-slate-900">{pkg.reportBatchCode}</strong>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase ${
-                    pkg.verificationStatus.includes('Verified')
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase ${pkg.verificationStatus.includes('Verified')
                       ? 'bg-emerald-100 text-emerald-800'
                       : 'bg-amber-100 text-amber-800'
-                  }`}>
+                    }`}>
                     {pkg.verificationStatus}
                   </span>
                 </div>

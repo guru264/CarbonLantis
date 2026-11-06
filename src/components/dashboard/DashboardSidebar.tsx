@@ -56,8 +56,8 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       icon: Activity
     },
     {
-      id: 'slurry-preparation',
-      title: 'Mineral & Dosing',
+      id: 'mineral',
+      title: 'Mineral',
       icon: FlaskConical
     },
     {
@@ -172,9 +172,9 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             <nav className="p-2 space-y-1.5 flex flex-col items-center mt-3" aria-label="Platform Modules">
               {navModules.map((item) => {
                 const Icon = item.icon;
-                const isActive =
-                  activeTab === item.id ||
-                  (item.id === 'slurry-preparation' && activeTab === 'mineral-dosing');
+                const isMineralItem = item.id === 'mineral' || item.id === 'slurry-preparation';
+                const isMineralActive = activeTab === 'mineral' || activeTab === 'slurry-preparation' || activeTab === 'mineral-dosing';
+                const isActive = activeTab === item.id || (isMineralItem && isMineralActive);
 
                 return (
                   <div key={item.id} className="relative group flex justify-center w-full">
@@ -206,9 +206,9 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             <nav className="p-3 space-y-1 mt-2" aria-label="Platform Modules">
               {navModules.map((item) => {
                 const Icon = item.icon;
-                const isActive =
-                  activeTab === item.id ||
-                  (item.id === 'slurry-preparation' && activeTab === 'mineral-dosing');
+                const isMineralItem = item.id === 'mineral' || item.id === 'slurry-preparation';
+                const isMineralActive = activeTab === 'mineral' || activeTab === 'slurry-preparation' || activeTab === 'mineral-dosing';
+                const isActive = activeTab === item.id || (isMineralItem && isMineralActive);
 
                 return (
                   <button
