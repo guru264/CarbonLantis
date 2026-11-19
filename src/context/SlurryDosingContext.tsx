@@ -10,12 +10,15 @@ export interface TankBatchConstituent {
   origin: string;
   dateAdded: string;
   status: string;
+  caco3Pct?: number;
+  caoh2Pct?: number;
+  totalCarbonPct?: number;
 }
 
 export interface TankStorageData {
   id: 'T001' | 'T002';
   name: string;
-  capacityLiters: number; // strictly 1,000 Litres
+  capacityLiters: number; // strictly 200 Litres
   currentVolumeLiters: number;
   densityKgPerL: number;
   ph: number;
@@ -67,8 +70,8 @@ const INITIAL_TANKS: TankStorageData[] = [
   {
     id: 'T001',
     name: 'Mixer Tank T001',
-    capacityLiters: 1000,
-    currentVolumeLiters: 650,
+    capacityLiters: 200,
+    currentVolumeLiters: 150,
     densityKgPerL: 1.36,
     ph: 9.6,
     motorRpm: 120,
@@ -77,32 +80,38 @@ const INITIAL_TANKS: TankStorageData[] = [
       {
         batchId: 'MB-2026-001',
         mineralType: 'Magnesium Hydroxide (Mg(OH)₂)',
-        mineralMassKg: 240,
-        waterQuantityLiters: 290,
-        slurryVolumeLiters: 380,
+        mineralMassKg: 50,
+        waterQuantityLiters: 60,
+        slurryVolumeLiters: 80,
         supplier: 'Coromandel Coastal Marine Reagents',
         origin: 'Salem Coastal Processing, TN',
         dateAdded: '28 Oct 2026, 09:15',
-        status: 'MRV Certified'
+        status: 'MRV Certified',
+        caco3Pct: 2.1,
+        caoh2Pct: 1.5,
+        totalCarbonPct: 0.6
       },
       {
         batchId: 'MB-2026-002',
         mineralType: 'Calcium Carbonate (CaCO₃)',
-        mineralMassKg: 170,
-        waterQuantityLiters: 205,
-        slurryVolumeLiters: 270,
+        mineralMassKg: 40,
+        waterQuantityLiters: 50,
+        slurryVolumeLiters: 70,
         supplier: 'Andhra Mineral Corporation',
         origin: 'Kadapa Sourcing Mine, AP',
         dateAdded: '30 Oct 2026, 14:40',
-        status: 'MRV Certified'
+        status: 'MRV Certified',
+        caco3Pct: 94.8,
+        caoh2Pct: 1.2,
+        totalCarbonPct: 11.4
       }
     ]
   },
   {
     id: 'T002',
     name: 'Mixer Tank T002',
-    capacityLiters: 1000,
-    currentVolumeLiters: 300,
+    capacityLiters: 200,
+    currentVolumeLiters: 100,
     densityKgPerL: 1.32,
     ph: 9.4,
     motorRpm: 120,
@@ -111,13 +120,16 @@ const INITIAL_TANKS: TankStorageData[] = [
       {
         batchId: 'MB-2026-003',
         mineralType: 'Calcium Hydroxide (Ca(OH)₂)',
-        mineralMassKg: 190,
-        waterQuantityLiters: 230,
-        slurryVolumeLiters: 300,
+        mineralMassKg: 55,
+        waterQuantityLiters: 65,
+        slurryVolumeLiters: 100,
         supplier: 'Deccan GeoMinerals Ltd',
         origin: 'Visakhapatnam Quarry Reach, AP',
         dateAdded: '31 Oct 2026, 11:20',
-        status: 'MRV Certified'
+        status: 'MRV Certified',
+        caco3Pct: 4.5,
+        caoh2Pct: 92.4,
+        totalCarbonPct: 1.1
       }
     ]
   }

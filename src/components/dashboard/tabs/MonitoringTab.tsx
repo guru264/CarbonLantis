@@ -375,6 +375,33 @@ export const ASSET_ALERTS_MAP: Record<string, AssetAlert[]> = {
   ]
 };
 
+export interface ParamMeta {
+  key: string;
+  name: string;
+  shortLabel: string;
+  unit: string;
+  color: string;
+  normalRange: string;
+}
+
+export const ALL_PARAM_CONFIGS: Record<string, ParamMeta> = {
+  ph: { key: 'ph', name: 'pH Buffer', shortLabel: 'pH', unit: 'pH', color: '#0284C7', normalRange: '6.5 – 8.5' },
+  pco2: { key: 'pco2', name: 'pCO₂ Drawdown', shortLabel: 'pCO₂', unit: 'µatm', color: '#10B981', normalRange: '1800 – 2600' },
+  do: { key: 'do', name: 'Dissolved Oxygen', shortLabel: 'DO', unit: 'mg/L', color: '#8B5CF6', normalRange: '4.5 – 7.0' },
+  temperature: { key: 'temperature', name: 'Temperature', shortLabel: 'Temp', unit: '°C', color: '#F59E0B', normalRange: '22.0 – 30.0' },
+  ec: { key: 'ec', name: 'Conductivity', shortLabel: 'EC', unit: 'µS/cm', color: '#06B6D4', normalRange: '2400 – 3400' },
+  turbidity: { key: 'turbidity', name: 'Turbidity', shortLabel: 'Turbidity', unit: 'NTU', color: '#D97706', normalRange: '3.0 – 12.0' },
+  dco2: { key: 'dco2', name: 'Dissolved CO₂', shortLabel: 'dCO₂', unit: 'mg/L', color: '#0D9488', normalRange: '1.2 – 2.8' },
+  tds: { key: 'tds', name: 'Total Dissolved Solids', shortLabel: 'TDS', unit: 'ppm', color: '#6366F1', normalRange: '1500 – 2200' },
+  salinity: { key: 'salinity', name: 'Salinity', shortLabel: 'Salinity', unit: 'PSU', color: '#2563EB', normalRange: '1.2 – 2.6' },
+  dic: { key: 'dic', name: 'Dissolved Inorganic Carbon', shortLabel: 'DIC', unit: 'µmol/kg', color: '#059669', normalRange: '1900 – 2400' },
+  ta: { key: 'ta', name: 'Total Alkalinity', shortLabel: 'TA', unit: 'µmol/kg', color: '#3B82F6', normalRange: '2000 – 2700' },
+  hco3: { key: 'hco3', name: 'Bicarbonate', shortLabel: 'HCO₃⁻', unit: 'µmol/kg', color: '#9333EA', normalRange: '1800 – 2400' },
+  co3: { key: 'co3', name: 'Carbonate Ion', shortLabel: 'CO₃²⁻', unit: 'µmol/kg', color: '#E11D48', normalRange: '25 – 120' },
+  calcite: { key: 'calcite', name: 'Calcite Saturation', shortLabel: 'Ωcal', unit: 'Ω', color: '#EA580C', normalRange: '1.0 – 4.5' },
+  aragonite: { key: 'aragonite', name: 'Aragonite Saturation', shortLabel: 'Ωarag', unit: 'Ω', color: '#C026D3', normalRange: '0.8 – 3.2' },
+};
+
 export const MonitoringTab: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlAsset = searchParams.get('asset');
@@ -388,8 +415,12 @@ export const MonitoringTab: React.FC = () => {
     }
   }, [urlAsset]);
 
+  // Asset type detection: River Node & AquaNode are stationary MRV stations; Aqua Drone is mobile dosing vessel
+  const isStationaryNode = selectedAsset.includes('Node') || selectedAsset.startsWith('AquaNode') || selectedAsset.startsWith('RiverNode');
+
   const currentAssetData = ASSET_TELEMETRY_MAP[selectedAsset] || ASSET_TELEMETRY_MAP['AquaDrone_MVP_001'];
   const timeseriesData = currentAssetData.timeseries;
+  const [selectedStream, setSelectedStream] = useState<'Upstream' | 'Dosing' | 'Downstream'>('Dosing');
   const [selectedDateIso, setSelectedDateIso] = useState('2026-10-16');
   const [selectedDate, setSelectedDate] = useState('16 Oct 2026');
   const urlMode = searchParams.get('mode');
@@ -398,15 +429,83 @@ export const MonitoringTab: React.FC = () => {
   );
   const [exportToast, setExportToast] = useState<string | null>(null);
 
-  // Available Parameters Toggle (5 parameters)
-  const [params, setParams] = useState({
+  // Available parameters tailored strictly by asset type and stream
+  const availableParamKeys = useMemo(() => {
+    if (isStationaryNode) {
+      // River Node or AquaNode: ONLY pH, EC, Turbidity, DO, dCO2, TDS, Salinity
+      return ['ph', 'ec', 'turbidity', 'do', 'dco2', 'tds', 'salinity'];
+    }
+    // Aqua Drone:
+    if (selectedStream === 'Dosing') {
+      // Dosing stream: ONLY pH, DO, EC, Turbidity
+      return ['ph', 'do', 'ec', 'turbidity'];
+    }
+    // Downstream and Upstream: existing features + Turbidity
+    return [
+      'ph',
+      'pco2',
+      'do',
+      'temperature',
+      'ec',
+      'turbidity',
+      'dic',
+      'ta',
+      'hco3',
+      'co3',
+      'calcite',
+      'aragonite'
+    ];
+  }, [isStationaryNode, selectedStream]);
+
+  // Dynamic parameters on/off toggles
+  const [params, setParams] = useState<Record<string, boolean>>({
     ph: true,
-    pco2: true,
+    ec: true,
+    turbidity: true,
     do: true,
+    dco2: true,
+    tds: false,
+    salinity: false,
+    pco2: true,
     temperature: true,
-    ec: false,
+    dic: true,
+    ta: true,
+    hco3: false,
+    co3: false,
+    calcite: false,
+    aragonite: false,
   });
+
+  // Keep active params valid whenever availableParamKeys changes
+  useEffect(() => {
+    setParams((prev) => {
+      const next: Record<string, boolean> = { ...prev };
+      let activeCount = 0;
+      availableParamKeys.forEach((key) => {
+        if (next[key] === undefined) {
+          next[key] = true;
+        }
+        if (next[key]) activeCount++;
+      });
+      if (activeCount === 0) {
+        availableParamKeys.slice(0, 3).forEach((key) => {
+          next[key] = true;
+        });
+      }
+      return next;
+    });
+  }, [availableParamKeys]);
+
+  // Active parameter configurations currently selected and visible
+  const activeVisibleParams = useMemo(() => {
+    return availableParamKeys
+      .filter((k) => params[k])
+      .map((k) => ALL_PARAM_CONFIGS[k])
+      .filter(Boolean);
+  }, [availableParamKeys, params]);
+
   const [isParamDropdownOpen, setIsParamDropdownOpen] = useState(false);
+  const [hoveredParamKey, setHoveredParamKey] = useState<string | null>(null);
 
   // Current Telemetry Reference Time
   const scrubberProgress = 0.466; // ~10:15 am reference time
@@ -432,7 +531,7 @@ export const MonitoringTab: React.FC = () => {
   };
 
   // Toggle Parameter Visibility
-  const toggleParam = (key: keyof typeof params) => {
+  const toggleParam = (key: string) => {
     setParams((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
@@ -471,8 +570,9 @@ export const MonitoringTab: React.FC = () => {
   const [hoverCursor, setHoverCursor] = useState<{
     active: boolean;
     x: number;
+    y: number;
     sec: number;
-    telem: { ph: number; pco2: number; do: number; temp: number };
+    telem: Record<string, any>;
   } | null>(null);
 
   // Time format helper: returns HH:mm or HH:mm:ss based on depth
@@ -497,7 +597,7 @@ export const MonitoringTab: React.FC = () => {
     return `${span}s View (Full Depth • Seconds)`;
   };
 
-  // High-fidelity continuous telemetry interpolation at any second
+  // High-fidelity continuous telemetry interpolation at any second (Dynamic based on selectedStream reach and asset type)
   const getInterpolatedTelemetryAtSecond = (sec: number) => {
     const clampedSec = Math.max(0, Math.min(TOTAL_DAY_SECONDS, sec));
     const hourFloat = clampedSec / 3600;
@@ -509,37 +609,156 @@ export const MonitoringTab: React.FC = () => {
     const d0 = timeseriesData[idx0];
     const d1 = timeseriesData[idx1];
 
-    let ph = d0.ph + (d1.ph - d0.ph) * smoothU;
-    let pco2 = d0.pco2 + (d1.pco2 - d0.pco2) * smoothU;
-    let doVal = d0.do + (d1.do - d0.do) * smoothU;
-    let temp = 25.0 + (d0.temp + (d1.temp - d0.temp) * smoothU) * 1.3;
+    let basePh = d0.ph + (d1.ph - d0.ph) * smoothU;
+    let basePco2 = d0.pco2 + (d1.pco2 - d0.pco2) * smoothU;
+    let baseDo = d0.do + (d1.do - d0.do) * smoothU;
+    let baseTemp = 25.0 + (d0.temp + (d1.temp - d0.temp) * smoothU) * 1.3;
 
     // Realistic in-situ hydrodynamic wavelets for minute and seconds depth:
     const microPhase = clampedSec * 0.12;
     const wave1 = Math.sin(microPhase) * 0.12;
     const wave2 = Math.cos(microPhase * 2.3) * 0.06;
 
-    ph = Math.max(6.8, Math.min(11.2, ph + wave1 + wave2 * 0.5));
-    pco2 = Math.round(pco2 - (wave1 * 85 + wave2 * 40));
-    doVal = Math.max(3.5, Math.min(6.8, doVal + wave2 * 0.25));
-    temp = Math.max(24.5, Math.min(29.5, temp + wave1 * 0.1));
+    let ph: number;
+    let pco2: number;
+    let doVal: number;
+    let temp: number;
+    let ec: number;
+    let turbidity: number;
+    let dco2: number;
+    let tds: number;
+    let salinity: number;
+    let ta: number;
+    let dic: number;
+    let hco3: number;
+    let co3: number;
+    let calcite: number;
+    let aragonite: number;
 
-    return { ph, pco2, do: doVal, temp };
+    if (isStationaryNode) {
+      // Stationary MRV Node (RiverNode_RJY or AquaNode_ATV): High-precision continuous baseline monitoring
+      const isRiver = selectedAsset.includes('River');
+      ph = +(isRiver ? 7.82 + wave1 * 0.22 : 7.95 + wave1 * 0.18).toFixed(2);
+      ec = Math.round((currentAssetData.baseEc || 3000) + wave1 * 30 + Math.sin(hourFloat * 0.4) * 40);
+      turbidity = +((currentAssetData.baseTurbidity || 6.2) + wave2 * 0.4 + Math.sin(hourFloat * 0.3) * 0.5).toFixed(1);
+      doVal = +(5.9 + wave2 * 0.2 + (isRiver ? 0.3 : 0)).toFixed(2);
+      dco2 = +(2.15 - wave1 * 0.15 + (isRiver ? 0.2 : 0)).toFixed(2);
+      tds = Math.round(ec * 0.64);
+      salinity = +(1.82 + (ec - 3000) * 0.0012).toFixed(2);
+      temp = +(25.6 + wave1 * 0.2).toFixed(1);
+      pco2 = 2240;
+      ta = 2190;
+      dic = 2110;
+      hco3 = 2030;
+      co3 = 38;
+      calcite = 1.35;
+      aragonite = 0.94;
+    } else if (selectedStream === 'Dosing') {
+      // Aqua Drone Dosing Plume (Active dispersion peaks at 06:00-09:00 and 15:00-18:00)
+      ph = +Math.max(6.8, Math.min(11.2, basePh + wave1 + wave2 * 0.5)).toFixed(2);
+      pco2 = Math.round(basePco2 - (wave1 * 85 + wave2 * 40));
+      doVal = +Math.max(3.5, Math.min(6.8, baseDo + wave2 * 0.25)).toFixed(2);
+      temp = +Math.max(24.5, Math.min(29.5, baseTemp + wave1 * 0.1)).toFixed(1);
+      const isDosingWindow = (clampedSec >= 21600 && clampedSec <= 32400) || (clampedSec >= 54000 && clampedSec <= 64800);
+      ec = Math.round((currentAssetData.baseEc || 3120) + (isDosingWindow ? 180 : 0) + wave1 * 25);
+      turbidity = +((currentAssetData.baseTurbidity || 8.4) + (isDosingWindow ? 2.8 : 0) + wave2 * 0.4).toFixed(1);
+      dco2 = +(1.9 + wave1 * 0.2).toFixed(2);
+      tds = Math.round(ec * 0.65);
+      salinity = +(1.95 + wave1 * 0.1).toFixed(2);
+
+      const deltaPhFromBase = Math.max(0, ph - 7.8);
+      ta = Math.round(2180 + deltaPhFromBase * 220 + (ph > 9.0 ? 180 : 0) + wave1 * 20);
+      dic = Math.round(2110 + deltaPhFromBase * 60 + wave2 * 15);
+      hco3 = Math.round(dic * (ph > 9.5 ? 0.88 : 0.95));
+      co3 = Math.round(Math.max(25, 35 + deltaPhFromBase * 65 + (ph > 9.5 ? 50 : 0)));
+      calcite = +(1.35 + deltaPhFromBase * 1.15 + (ph > 9.5 ? 0.8 : 0)).toFixed(2);
+      aragonite = +(0.92 + deltaPhFromBase * 0.78 + (ph > 9.5 ? 0.55 : 0)).toFixed(2);
+    } else if (selectedStream === 'Upstream') {
+      // Aqua Drone Upstream Baseline
+      ph = +Math.max(7.4, Math.min(8.0, 7.72 + wave1 * 0.4 + Math.sin(hourFloat * 0.25) * 0.08)).toFixed(2);
+      pco2 = Math.round(2420 + wave2 * 30 + Math.sin(hourFloat * 0.3) * 45);
+      doVal = +Math.max(5.1, Math.min(6.2, 5.7 + wave2 * 0.15)).toFixed(2);
+      temp = +Math.max(24.8, Math.min(27.2, baseTemp - 0.4)).toFixed(1);
+      ec = Math.round(2950 + wave1 * 20);
+      turbidity = +(6.5 + wave2 * 0.3).toFixed(1);
+      dco2 = 2.2;
+      tds = Math.round(ec * 0.64);
+      salinity = 1.75;
+      ta = Math.round(2140 + Math.sin(hourFloat * 0.2) * 15 + wave1 * 10);
+      dic = Math.round(2085 + Math.sin(hourFloat * 0.2) * 12 + wave1 * 8);
+      hco3 = Math.round(dic * 0.965);
+      co3 = Math.round(Math.max(20, Math.min(50, 32 + (ph - 7.7) * 40)));
+      calcite = +(1.22 + (ph - 7.7) * 0.8).toFixed(2);
+      aragonite = +(0.84 + (ph - 7.7) * 0.55).toFixed(2);
+    } else {
+      // Aqua Drone Downstream Reach
+      const isPostDosing = (clampedSec > 25200 && clampedSec < 43200) || clampedSec > 57600;
+      ph = +Math.max(7.85, Math.min(8.4, 8.12 + (isPostDosing ? 0.12 : 0) + wave1 * 0.3)).toFixed(2);
+      pco2 = Math.round(2080 - (isPostDosing ? 110 : 0) + wave2 * 35);
+      doVal = +Math.max(4.8, Math.min(6.5, 5.8 + wave2 * 0.18)).toFixed(2);
+      temp = +Math.max(24.9, Math.min(27.8, baseTemp)).toFixed(1);
+      ec = Math.round(3080 + wave1 * 25);
+      turbidity = +(6.8 + wave2 * 0.3).toFixed(1);
+      dco2 = 1.75;
+      tds = Math.round(ec * 0.64);
+      salinity = 1.88;
+      ta = Math.round(2395 + (isPostDosing ? 45 : 0) + wave1 * 12);
+      dic = Math.round(2270 + (isPostDosing ? 35 : 0) + wave2 * 10);
+      hco3 = Math.round(dic * 0.955);
+      co3 = Math.round(Math.max(30, Math.min(80, 52 + (ph - 8.1) * 35)));
+      calcite = +(1.82 + (ph - 8.1) * 0.6).toFixed(2);
+      aragonite = +(1.25 + (ph - 8.1) * 0.42).toFixed(2);
+    }
+
+    return {
+      ph, pco2, do: doVal, temp, ec, turbidity, dco2, tds, salinity,
+      ta, dic, hco3, co3, calcite, aragonite
+    };
   };
 
-  // Dynamic scale functions so variations and dosing peaks are clearly visible and pronounced:
-  // pH scale: 6.8 to 11.2 (baseline ~8.0, peak ~10.4)
-  const getYPh = (val: number) => padding.top + Math.max(0, Math.min(1, (11.5 - val) / (11.5 - 6.5))) * innerHeight;
-  // pCO2 scale: 1,800 to 3,200 µatm (peaks ~3000, drawdown dips to ~1980)
-  const getYPco2 = (val: number) => padding.top + Math.max(0, Math.min(1, (3200 - val) / (3200 - 1800))) * innerHeight;
-  // DO scale: 3.2 to 6.8 mg/L
-  const getYDo = (val: number) => padding.top + Math.max(0, Math.min(1, (6.8 - val) / (6.8 - 3.2))) * innerHeight;
-  // Water Temp scale: 24.0°C to 30.0°C
-  const getYTemp = (val: number) => padding.top + Math.max(0, Math.min(1, (30.0 - val) / (30.0 - 24.0))) * innerHeight;
+  // Unified dynamic scale mapping function for all parameters
+  const getYForParam = (key: string, val: number) => {
+    switch (key) {
+      case 'ph':
+        return padding.top + Math.max(0, Math.min(1, (11.5 - val) / (11.5 - 6.5))) * innerHeight;
+      case 'pco2':
+        return padding.top + Math.max(0, Math.min(1, (3200 - val) / (3200 - 1800))) * innerHeight;
+      case 'do':
+        return padding.top + Math.max(0, Math.min(1, (7.0 - val) / (7.0 - 3.2))) * innerHeight;
+      case 'temp':
+      case 'temperature':
+        return padding.top + Math.max(0, Math.min(1, (30.0 - val) / (30.0 - 23.0))) * innerHeight;
+      case 'ec':
+        return padding.top + Math.max(0, Math.min(1, (3600 - val) / (3600 - 2400))) * innerHeight;
+      case 'turbidity':
+        return padding.top + Math.max(0, Math.min(1, (15 - val) / (15 - 2))) * innerHeight;
+      case 'dco2':
+        return padding.top + Math.max(0, Math.min(1, (3.5 - val) / (3.5 - 0.8))) * innerHeight;
+      case 'tds':
+        return padding.top + Math.max(0, Math.min(1, (2400 - val) / (2400 - 1400))) * innerHeight;
+      case 'salinity':
+        return padding.top + Math.max(0, Math.min(1, (3.0 - val) / (3.0 - 1.0))) * innerHeight;
+      case 'ta':
+        return padding.top + Math.max(0, Math.min(1, (3000 - val) / (3000 - 1800))) * innerHeight;
+      case 'dic':
+        return padding.top + Math.max(0, Math.min(1, (2600 - val) / (2600 - 1800))) * innerHeight;
+      case 'hco3':
+        return padding.top + Math.max(0, Math.min(1, (2600 - val) / (2600 - 1700))) * innerHeight;
+      case 'co3':
+        return padding.top + Math.max(0, Math.min(1, (180 - val) / (180 - 15))) * innerHeight;
+      case 'calcite':
+        return padding.top + Math.max(0, Math.min(1, (5.0 - val) / (5.0 - 0.6))) * innerHeight;
+      case 'aragonite':
+        return padding.top + Math.max(0, Math.min(1, (3.5 - val) / (3.5 - 0.5))) * innerHeight;
+      default:
+        return padding.top + innerHeight / 2;
+    }
+  };
 
-  // Generic fallback mapping functions
-  const getYLeft = (val: number) => getYPh(val);
-  const getYRight = (val: number) => getYPco2(val);
+  const getYPh = (val: number) => getYForParam('ph', val);
+  const getYPco2 = (val: number) => getYForParam('pco2', val);
+  const getYDo = (val: number) => getYForParam('do', val);
+  const getYTemp = (val: number) => getYForParam('temperature', val);
 
   // Maps seconds to X pixel coordinate based on current zoom window
   const getTimeX = (sec: number) => {
@@ -608,33 +827,31 @@ export const MonitoringTab: React.FC = () => {
       pts.push({
         sec,
         x,
+        telem,
         ph: telem.ph,
         pco2: telem.pco2,
         do: telem.do,
         temp: telem.temp,
-        yPh: getYPh(telem.ph),
-        yPco2: getYPco2(telem.pco2),
-        yDo: getYDo(telem.do),
-        yTemp: getYTemp(telem.temp),
+        yPh: getYForParam('ph', telem.ph),
+        yPco2: getYForParam('pco2', telem.pco2),
       });
     }
     return pts;
-  }, [zoomWindow, timeseriesData]);
+  }, [zoomWindow, timeseriesData, selectedStream, isStationaryNode]);
 
-  const densePhPointsStr = denseSampledPoints.map((p) => `${p.x.toFixed(1)},${p.yPh.toFixed(1)}`).join(' ');
-  const densePco2PointsStr = denseSampledPoints.map((p) => `${p.x.toFixed(1)},${p.yPco2.toFixed(1)}`).join(' ');
-  const denseDoPointsStr = denseSampledPoints.map((p) => `${p.x.toFixed(1)},${p.yDo.toFixed(1)}`).join(' ');
-  const denseTempPointsStr = denseSampledPoints.map((p) => `${p.x.toFixed(1)},${p.yTemp.toFixed(1)}`).join(' ');
-
-  // SVG Area path for pH fill under the curve
-  const phAreaPathStr = `M ${padding.left},${chartHeight - padding.bottom} ` +
-    denseSampledPoints.map((p) => `L ${p.x.toFixed(1)},${p.yPh.toFixed(1)}`).join(' ') +
-    ` L ${chartWidth - padding.right},${chartHeight - padding.bottom} Z`;
-
-  // SVG Area path for pCO2 fill under curve
-  const pco2AreaPathStr = `M ${padding.left},${chartHeight - padding.bottom} ` +
-    denseSampledPoints.map((p) => `L ${p.x.toFixed(1)},${p.yPco2.toFixed(1)}`).join(' ') +
-    ` L ${chartWidth - padding.right},${chartHeight - padding.bottom} Z`;
+  // Dynamic polyline point strings generated for every active parameter
+  const polylinePointsMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    activeVisibleParams.forEach((param) => {
+      map[param.key] = denseSampledPoints
+        .map((p) => {
+          const val = (p.telem as any)[param.key === 'temperature' ? 'temp' : param.key] ?? 0;
+          return `${p.x.toFixed(1)},${getYForParam(param.key, val).toFixed(1)}`;
+        })
+        .join(' ');
+    });
+    return map;
+  }, [activeVisibleParams, denseSampledPoints]);
 
   // Dosing Bands Pixel Coordinates (Clipped to current zoom view)
   const c1RawStart = getTimeX(21600); // 06:00
@@ -815,19 +1032,39 @@ export const MonitoringTab: React.FC = () => {
   const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
     const chartPixelX = (mouseX / rect.width) * chartWidth;
+    const chartPixelY = (mouseY / rect.height) * chartHeight;
 
     if (chartPixelX >= padding.left && chartPixelX <= chartWidth - padding.right) {
       const sec = getSecFromX(chartPixelX);
       const telem = getInterpolatedTelemetryAtSecond(sec);
+
+      // Check proximity of chartPixelY to each active parameter line at this X coordinate
+      let closestKey: string | null = null;
+      let minDistance = 25; // 25px line proximity detection
+
+      activeVisibleParams.forEach((param) => {
+        const val = (telem as any)[param.key === 'temperature' ? 'temp' : param.key] ?? 0;
+        const lineY = getYForParam(param.key, val);
+        const dist = Math.abs(chartPixelY - lineY);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestKey = param.key;
+        }
+      });
+
+      setHoveredParamKey(closestKey);
       setHoverCursor({
         active: true,
         x: chartPixelX,
+        y: chartPixelY,
         sec: Math.round(sec),
         telem,
       });
     } else {
       setHoverCursor(null);
+      setHoveredParamKey(null);
     }
 
     if (isDraggingPan) {
@@ -862,89 +1099,412 @@ export const MonitoringTab: React.FC = () => {
   const handleSvgMouseLeave = () => {
     setIsDraggingPan(false);
     setHoverCursor(null);
+    setHoveredParamKey(null);
   };
 
-  // Standard Benchmark Metrics (Comparative analysis vs Regulatory Target Baseline)
-  const standardMetrics = [
-    params.ph && {
-      id: 'ph',
-      name: 'pH Buffer',
-      unit: 'pH',
-      measured: parseFloat(currentPh),
-      baseline: 8.0,
-      min: 6.5,
-      max: 8.5,
-      normalizedMeasured: Math.min(145, Math.max(10, (parseFloat(currentPh) / 8.0) * 100)),
-      status: 'Optimal Buffer',
-      color: '#0284C7',
-      deltaText: `${parseFloat(currentPh) >= 8.0 ? '+' : ''}${(parseFloat(currentPh) - 8.0).toFixed(2)}`
-    },
-    params.pco2 && {
-      id: 'pco2',
-      name: 'pCO₂ Drawdown',
-      unit: 'µatm',
-      measured: currentPco2,
-      baseline: 2200,
-      min: 1600,
-      max: 2800,
-      normalizedMeasured: Math.min(145, Math.max(10, (currentPco2 / 2200) * 100)),
-      status: 'Active Drawdown',
-      color: '#10B981',
-      deltaText: `${currentPco2 >= 2200 ? '+' : ''}${Math.round(((currentPco2 - 2200) / 2200) * 100)}%`
-    },
-    params.do && {
-      id: 'do',
-      name: 'Dissolved Oxygen',
-      unit: 'mg/L',
-      measured: parseFloat(currentDo),
-      baseline: 5.0,
-      min: 4.0,
-      max: 7.0,
-      normalizedMeasured: Math.min(145, Math.max(10, (parseFloat(currentDo) / 5.0) * 100)),
-      status: 'Healthy Aerobic',
-      color: '#8B5CF6',
-      deltaText: `${parseFloat(currentDo) >= 5.0 ? '+' : ''}${(parseFloat(currentDo) - 5.0).toFixed(1)} mg/L`
-    },
-    params.temperature && {
-      id: 'temperature',
-      name: 'Temperature',
-      unit: '°C',
-      measured: parseFloat(currentTemp),
-      baseline: 26.0,
-      min: 22.0,
-      max: 30.0,
-      normalizedMeasured: Math.min(145, Math.max(10, (parseFloat(currentTemp) / 26.0) * 100)),
-      status: 'Nominal Ambient',
-      color: '#F59E0B',
-      deltaText: `${parseFloat(currentTemp) >= 26.0 ? '+' : ''}${(parseFloat(currentTemp) - 26.0).toFixed(1)} °C`
-    },
-    params.ec && {
-      id: 'ec',
-      name: 'Conductivity (EC)',
-      unit: 'µS/cm',
-      measured: currentAssetData.baseEc,
-      baseline: 3000,
-      min: 2000,
-      max: 3600,
-      normalizedMeasured: Math.min(145, Math.max(10, (currentAssetData.baseEc / 3000) * 100)),
-      status: 'Estuarine Mix',
-      color: '#06B6D4',
-      deltaText: `${currentAssetData.baseEc >= 3000 ? '+' : ''}${currentAssetData.baseEc - 3000} µS/cm`
-    }
-  ].filter(Boolean) as {
-    id: string;
-    name: string;
-    unit: string;
-    measured: number;
-    baseline: number;
-    min: number;
-    max: number;
-    normalizedMeasured: number;
-    status: string;
-    color: string;
-    deltaText: string;
-  }[];
+  // Helper to determine responsive grid column class based on active count
+  const getParamGridColsClass = (count: number) => {
+    if (count <= 1) return 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-sm gap-2.5';
+    if (count === 2) return 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 max-w-xl gap-2.5';
+    if (count === 3) return 'grid grid-cols-2 sm:grid-cols-3 gap-2.5';
+    if (count === 4) return 'grid grid-cols-2 sm:grid-cols-4 gap-2.5';
+    if (count === 5) return 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5';
+    if (count === 6) return 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5';
+    return 'grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5';
+  };
 
+  // Reusable Single Parameter Card Renderer
+  const renderParamCard = (key: string) => {
+    switch (key) {
+      case 'ph':
+        return (
+          <div key="card-ph" className="p-3 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE]/60 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">
+                <Droplets className="w-3 h-3" />
+              </div>
+              <span className="text-xs font-bold text-slate-700">pH</span>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
+                {currentPh}
+              </div>
+            </div>
+            <div className="mt-1 flex flex-col gap-0.5">
+              <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold self-start ${!isStationaryNode && selectedStream === 'Dosing' && +currentPh > 9.0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                {!isStationaryNode && selectedStream === 'Dosing' && +currentPh > 9.0 ? 'Dosing Plume' : 'Normal'}
+              </span>
+              <span className="text-[9px] text-slate-500 font-mono mt-0.5">
+                {!isStationaryNode && selectedStream === 'Dosing' ? '(6.5 – 10.5)' : '(6.5 – 8.5)'}
+              </span>
+            </div>
+          </div>
+        );
+
+      case 'pco2':
+        return (
+          <div key="card-pco2" className="p-3 rounded-lg bg-[#ECFDF5] border border-[#A7F3D0]/60 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">
+                <Wind className="w-3 h-3" />
+              </div>
+              <span className="text-xs font-bold text-slate-700">pCO₂</span>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
+                {currentPco2}
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 block mt-0.5">µatm</span>
+            </div>
+            <div className="mt-1">
+              <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                Normal
+              </span>
+            </div>
+          </div>
+        );
+
+      case 'do':
+        return (
+          <div key="card-do" className="p-3 rounded-lg bg-[#F5F3FF] border border-[#DDD6FE]/60 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">
+                <Activity className="w-3 h-3" />
+              </div>
+              <span className="text-xs font-bold text-slate-700">DO</span>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
+                {currentDo}
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 block mt-0.5">mg/L</span>
+            </div>
+            <div className="mt-1">
+              <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                Normal
+              </span>
+            </div>
+          </div>
+        );
+
+      case 'temperature':
+        return (
+          <div key="card-temp" className="p-3 rounded-lg bg-[#FFF7ED] border border-[#FED7AA]/60 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px]">
+                <Thermometer className="w-3 h-3" />
+              </div>
+              <span className="text-xs font-bold text-slate-700 truncate">Temperature</span>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
+                {currentTemp}
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 block mt-0.5">°C</span>
+            </div>
+            <div className="mt-1">
+              <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                Normal
+              </span>
+            </div>
+          </div>
+        );
+
+      case 'ec':
+        return (
+          <div key="card-ec" className="p-3 rounded-lg bg-[#F0FDF4] border border-[#BAE6FD]/60 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-5 h-5 rounded-full bg-cyan-600 text-white flex items-center justify-center text-[10px]">
+                <Zap className="w-3 h-3" />
+              </div>
+              <span className="text-xs font-bold text-slate-700">EC</span>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
+                {scrubberTelem.ec}
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 block mt-0.5">µS/cm</span>
+            </div>
+            <div className="mt-1">
+              <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                Normal
+              </span>
+            </div>
+          </div>
+        );
+
+      case 'turbidity':
+        return (
+          <div key="card-turbidity" className="p-3 rounded-lg bg-[#FFFBEB] border border-[#FDE68A]/60 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-5 h-5 rounded-full bg-amber-600 text-white flex items-center justify-center text-[10px]">
+                <Waves className="w-3 h-3" />
+              </div>
+              <span className="text-xs font-bold text-slate-700 truncate">Turbidity</span>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
+                {scrubberTelem.turbidity}
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 block mt-0.5">NTU</span>
+            </div>
+            <div className="mt-1">
+              <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                Normal
+              </span>
+            </div>
+          </div>
+        );
+
+      case 'dco2':
+        return (
+          <div key="card-dco2" className="p-3 rounded-lg bg-[#ECFDF5] border border-[#A7F3D0]/60 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[10px]">
+                <Wind className="w-3 h-3" />
+              </div>
+              <span className="text-xs font-bold text-slate-700">dCO₂</span>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
+                {scrubberTelem.dco2 ?? 2.15}
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 block mt-0.5">mg/L</span>
+            </div>
+            <div className="mt-1">
+              <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                Normal
+              </span>
+            </div>
+          </div>
+        );
+
+      case 'tds':
+        return (
+          <div key="card-tds" className="p-3 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1]/60 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-5 h-5 rounded-full bg-slate-600 text-white flex items-center justify-center text-[10px]">
+                <Layers className="w-3 h-3" />
+              </div>
+              <span className="text-xs font-bold text-slate-700">TDS</span>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
+                {scrubberTelem.tds}
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 block mt-0.5">ppm</span>
+            </div>
+            <div className="mt-1">
+              <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                Normal
+              </span>
+            </div>
+          </div>
+        );
+
+      case 'salinity':
+        return (
+          <div key="card-salinity" className="p-3 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1]/60 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center text-[10px]">
+                <ShieldCheck className="w-3 h-3" />
+              </div>
+              <span className="text-xs font-bold text-slate-700">Salinity</span>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
+                {scrubberTelem.salinity}
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 block mt-0.5">PSU</span>
+            </div>
+            <div className="mt-1">
+              <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                Normal
+              </span>
+            </div>
+          </div>
+        );
+
+      case 'ta':
+        return (
+          <div key="card-ta" className="p-2.5 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE]/60 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[11px] font-bold text-slate-700">TA</span>
+              <span className="text-[9.5px] font-mono text-slate-400">µmol/kg</span>
+            </div>
+            <div className="text-xl font-black text-blue-700 tracking-tight font-sans my-0.5">
+              {scrubberTelem.ta}
+            </div>
+            <span className={`inline-block px-1.5 py-0.2 rounded text-[9.5px] font-bold self-start ${scrubberTelem.ta > 2400 ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'
+              }`}>
+              {scrubberTelem.ta > 2400 ? 'Enhanced Sink' : 'Baseline Buffer'}
+            </span>
+          </div>
+        );
+
+      case 'dic':
+        return (
+          <div key="card-dic" className="p-2.5 rounded-lg bg-[#F0FDFA] border border-[#99F6E4]/60 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[11px] font-bold text-slate-700">DIC</span>
+              <span className="text-[9.5px] font-mono text-slate-400">µmol/kg</span>
+            </div>
+            <div className="text-xl font-black text-teal-700 tracking-tight font-sans my-0.5">
+              {scrubberTelem.dic}
+            </div>
+            <span className="inline-block px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 text-[9.5px] font-bold self-start">
+              Inorganic Pool
+            </span>
+          </div>
+        );
+
+      case 'hco3':
+        return (
+          <div key="card-hco3" className="p-2.5 rounded-lg bg-[#FAF5FF] border border-[#E9D5FF]/60 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[11px] font-bold text-slate-700">HCO₃⁻</span>
+              <span className="text-[9.5px] font-mono text-slate-400">µmol/kg</span>
+            </div>
+            <div className="text-xl font-black text-purple-700 tracking-tight font-sans my-0.5">
+              {scrubberTelem.hco3}
+            </div>
+            <span className="inline-block px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 text-[9.5px] font-bold self-start">
+              Durable Storage
+            </span>
+          </div>
+        );
+
+      case 'co3':
+        return (
+          <div key="card-co3" className="p-2.5 rounded-lg bg-[#FFF1F2] border border-[#FECDD3]/60 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[11px] font-bold text-slate-700">CO₃²⁻</span>
+              <span className="text-[9.5px] font-mono text-slate-400">µmol/kg</span>
+            </div>
+            <div className="text-xl font-black text-rose-700 tracking-tight font-sans my-0.5">
+              {scrubberTelem.co3}
+            </div>
+            <span className={`inline-block px-1.5 py-0.2 rounded text-[9.5px] font-bold self-start ${scrubberTelem.co3 > 90 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+              }`}>
+              {scrubberTelem.co3 > 90 ? 'Plume Peak' : 'Equilibrium'}
+            </span>
+          </div>
+        );
+
+      case 'calcite':
+        return (
+          <div key="card-calcite" className="p-2.5 rounded-lg bg-[#FFF7ED] border border-[#FFEDD5]/80 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[11px] font-bold text-slate-700">Ω Calcite</span>
+              <span className="text-[9.5px] font-mono text-slate-400">Ωcal</span>
+            </div>
+            <div className="text-xl font-black text-orange-700 tracking-tight font-sans my-0.5">
+              {scrubberTelem.calcite}
+            </div>
+            <span className={`inline-block px-1.5 py-0.2 rounded text-[9.5px] font-bold self-start ${scrubberTelem.calcite < 4.5 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+              }`}>
+              {scrubberTelem.calcite < 4.5 ? 'Safe Saturation' : 'Elevated'}
+            </span>
+          </div>
+        );
+
+      case 'aragonite':
+        return (
+          <div key="card-aragonite" className="p-2.5 rounded-lg bg-[#FDF4FF] border border-[#F5D0FE]/70 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[11px] font-bold text-slate-700">Ω Aragonite</span>
+              <span className="text-[9.5px] font-mono text-slate-400">Ωarag</span>
+            </div>
+            <div className="text-xl font-black text-fuchsia-700 tracking-tight font-sans my-0.5">
+              {scrubberTelem.aragonite}
+            </div>
+            <span className="inline-block px-1.5 py-0.2 rounded bg-fuchsia-100 text-fuchsia-800 text-[9.5px] font-bold self-start">
+              {scrubberTelem.aragonite >= 1.0 ? 'Supersaturated' : 'Under'}
+            </span>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Sensor Readings Cards Component (dynamically renders ONLY parameters selected in filter above)
+  const renderSensorReadingsCards = () => {
+    if (isStationaryNode) {
+      /* River Node / AquaNode: Stationary Parameters */
+      const activeStationaryKeys = ['ph', 'ec', 'turbidity', 'do', 'dco2', 'tds', 'salinity'].filter((k) => params[k]);
+      if (activeStationaryKeys.length === 0) {
+        return (
+          <div className="p-6 text-center text-slate-500 text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            No parameters selected in the filter above. Select parameters to display readings.
+          </div>
+        );
+      }
+      return (
+        <div className={getParamGridColsClass(activeStationaryKeys.length)}>
+          {activeStationaryKeys.map(renderParamCard)}
+        </div>
+      );
+    }
+
+    if (selectedStream === 'Dosing') {
+      /* Aqua Drone Dosing Stream: ONLY 4 Parameters */
+      const activeDosingKeys = ['ph', 'do', 'ec', 'turbidity'].filter((k) => params[k]);
+      if (activeDosingKeys.length === 0) {
+        return (
+          <div className="p-6 text-center text-slate-500 text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            No parameters selected in the filter above. Select parameters to display readings.
+          </div>
+        );
+      }
+      return (
+        <div className={getParamGridColsClass(activeDosingKeys.length)}>
+          {activeDosingKeys.map(renderParamCard)}
+        </div>
+      );
+    }
+
+    /* Aqua Drone Upstream / Downstream: Core Parameters + Carbonate Speciation Suite */
+    const coreKeys = ['ph', 'pco2', 'do', 'temperature', 'ec', 'turbidity'].filter((k) => params[k]);
+    const geochemKeys = ['ta', 'dic', 'hco3', 'co3', 'calcite', 'aragonite'].filter((k) => params[k]);
+
+    if (coreKeys.length === 0 && geochemKeys.length === 0) {
+      return (
+        <div className="p-6 text-center text-slate-500 text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200">
+          No parameters selected in the filter above. Select parameters to display readings.
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {coreKeys.length > 0 && (
+          <div className={getParamGridColsClass(coreKeys.length)}>
+            {coreKeys.map(renderParamCard)}
+          </div>
+        )}
+
+        {geochemKeys.length > 0 && (
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                Carbonate System Geochemistry ({selectedStream} Stream Reach)
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                PyCO2SYS Speciation Model
+              </span>
+            </div>
+            <div className={getParamGridColsClass(geochemKeys.length)}>
+              {geochemKeys.map(renderParamCard)}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
   const renderAlertIcon = (type: AssetAlert['type']) => {
     switch (type) {
       case 'danger':
@@ -996,30 +1556,36 @@ export const MonitoringTab: React.FC = () => {
         </div>
       )}
 
-      {/* 1. Page Title & Subtitle */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      {/* 1. Page Title, Asset Badges & Export Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#0A1628] tracking-tight flex items-center gap-2">
             <Activity className="w-6 h-6 text-blue-600" />
             Monitoring
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Sonde telemetry, graphs & location for <strong className="text-slate-800 font-semibold">{currentAssetData.name}</strong> ({currentAssetData.assetId} • {currentAssetData.location})
-          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-200">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-200">
             <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
             {currentAssetData.name}
           </span>
-          <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-medium">
+          <span className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-medium border border-slate-200">
             {currentAssetData.type}
           </span>
+          <button
+            type="button"
+            onClick={handleExport}
+            className="btn-press px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs cursor-pointer flex items-center gap-1.5 ml-1"
+            title="Export CSV Telemetry"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export CSV</span>
+          </button>
         </div>
       </div>
 
-      {/* 2. Top Filter Controls Bar (4 Cards in a row) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* 2. Top Filter Controls Bar (Asset, Stream [mobile only], Date, Visualization, Parameters) */}
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${!isStationaryNode ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3`}>
         {/* Card 1: Asset Selector */}
         <div className="bg-white rounded-xl border border-slate-200/90 p-3 shadow-xs">
           <label className="block text-[11px] text-slate-500 font-medium mb-1">
@@ -1052,7 +1618,34 @@ export const MonitoringTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 2: Date Selector (Functional date selection) */}
+        {/* Card 2: Stream Filter (Upstream, Dosing, Downstream) - Mobile Aqua Drone ONLY */}
+        {!isStationaryNode && (
+          <div className="bg-white rounded-xl border border-slate-200/90 p-3 shadow-xs">
+            <label className="block text-[11px] text-slate-500 font-medium mb-1">
+              Stream Analysis
+            </label>
+            <div className="relative flex items-center bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg px-2.5 py-1.5 transition-colors">
+              <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 mr-2 ${selectedStream === 'Upstream' ? 'bg-sky-100 text-sky-700' :
+                  selectedStream === 'Dosing' ? 'bg-emerald-100 text-emerald-700' :
+                    'bg-indigo-100 text-indigo-700'
+                }`}>
+                <Layers className="w-3.5 h-3.5" />
+              </div>
+              <select
+                value={selectedStream}
+                onChange={(e) => setSelectedStream(e.target.value as 'Upstream' | 'Dosing' | 'Downstream')}
+                className="w-full appearance-none bg-transparent text-xs font-semibold text-slate-800 pr-6 outline-none cursor-pointer"
+              >
+                <option value="Upstream">Upstream (Baseline)</option>
+                <option value="Dosing">Dosing (Mixing Zone)</option>
+                <option value="Downstream">Downstream (Ingress)</option>
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+        )}
+
+        {/* Card 3: Date Selector (Functional date selection) */}
         <div className="bg-white rounded-xl border border-slate-200/90 p-3 shadow-xs">
           <label className="block text-[11px] text-slate-500 font-medium mb-1">
             Date
@@ -1075,7 +1668,7 @@ export const MonitoringTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 3: Visualization Dropdown (Standard vs Time-series) */}
+        {/* Card 4: Visualization Dropdown (Standard vs Time-series) */}
         <div className="bg-white rounded-xl border border-slate-200/90 p-3 shadow-xs">
           <label className="block text-[11px] text-slate-500 font-medium mb-1">
             Visualization
@@ -1093,14 +1686,14 @@ export const MonitoringTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 4: Available Parameters Popover & Direct Export Button */}
+        {/* Card 5: Available Parameters Filter */}
         <div className="bg-white rounded-xl border border-slate-200/90 p-3 shadow-xs">
           <label className="block text-[11px] text-slate-500 font-medium mb-1">
-            Parameters & Export
+            Parameters
           </label>
-          <div className="flex items-center gap-2">
-            {/* Available Parameters Button with 5 Checkboxes Popover */}
-            <div className="relative flex-1">
+          <div>
+            {/* Available Parameters Button with Dynamic Popover */}
+            <div className="relative">
               <button
                 type="button"
                 onClick={() => setIsParamDropdownOpen(!isParamDropdownOpen)}
@@ -1109,112 +1702,94 @@ export const MonitoringTab: React.FC = () => {
               >
                 <div className="flex items-center gap-1.5 truncate">
                   <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">Parameters ({Object.values(params).filter(Boolean).length}/5)</span>
+                  <span className="truncate">Parameters ({activeVisibleParams.length}/{availableParamKeys.length})</span>
                 </div>
                 <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${isParamDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* Popover Dropdown with 5 Checkboxes */}
+              {/* Popover Dropdown tailored to available parameters */}
               {isParamDropdownOpen && (
                 <>
                   <div
                     className="fixed inset-0 z-30"
                     onClick={() => setIsParamDropdownOpen(false)}
                   />
-                  <div className="absolute left-0 sm:right-0 sm:left-auto top-full mt-1.5 z-40 w-60 bg-white rounded-xl border border-slate-200 shadow-xl p-3 space-y-2 animate-in fade-in zoom-in-95 duration-100">
-                    <div className="flex items-center justify-between pb-1 border-b border-slate-100">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Available Parameters
-                      </span>
-                      <span className="text-[10px] text-blue-600 font-bold font-mono">
-                        {Object.values(params).filter(Boolean).length} Active
-                      </span>
+                  <div className="absolute left-0 sm:right-0 sm:left-auto top-full mt-1.5 z-40 w-72 bg-white rounded-xl border border-slate-200 shadow-2xl p-3 space-y-2.5 animate-in fade-in zoom-in-95 duration-100 max-h-[75vh] overflow-y-auto">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Parameters Filter
+                        </span>
+                        <span className="text-[10px] text-blue-600 font-bold font-mono">
+                          {activeVisibleParams.length} of {availableParamKeys.length} Active
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next: Record<string, boolean> = { ...params };
+                            availableParamKeys.forEach((k) => (next[k] = true));
+                            setParams(next);
+                          }}
+                          className="text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline px-1 py-0.5 cursor-pointer"
+                        >
+                          All
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next: Record<string, boolean> = { ...params };
+                            availableParamKeys.forEach((k, idx) => {
+                              next[k] = idx < 3;
+                            });
+                            setParams(next);
+                          }}
+                          className="text-[10px] font-bold text-slate-500 hover:text-slate-700 hover:underline px-1 py-0.5 cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      </div>
                     </div>
 
-                    {/* 1. pH */}
-                    <label className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-slate-50 transition-colors select-none">
-                      <input
-                        type="checkbox"
-                        checked={params.ph}
-                        onChange={() => toggleParam('ph')}
-                        className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                      />
-                      <span className="text-xs font-medium text-slate-800 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-blue-600" />
-                        pH
-                      </span>
-                    </label>
-
-                    {/* 2. pCO2 */}
-                    <label className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-slate-50 transition-colors select-none">
-                      <input
-                        type="checkbox"
-                        checked={params.pco2}
-                        onChange={() => toggleParam('pco2')}
-                        className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                      />
-                      <span className="text-xs font-medium text-slate-800 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-600" />
-                        pCO₂
-                      </span>
-                    </label>
-
-                    {/* 3. DO */}
-                    <label className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-slate-50 transition-colors select-none">
-                      <input
-                        type="checkbox"
-                        checked={params.do}
-                        onChange={() => toggleParam('do')}
-                        className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      />
-                      <span className="text-xs font-medium text-slate-800 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-indigo-600" />
-                        DO
-                      </span>
-                    </label>
-
-                    {/* 4. Temperature */}
-                    <label className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-slate-50 transition-colors select-none">
-                      <input
-                        type="checkbox"
-                        checked={params.temperature}
-                        onChange={() => toggleParam('temperature')}
-                        className="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
-                      />
-                      <span className="text-xs font-medium text-slate-800 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-amber-600" />
-                        Temperature
-                      </span>
-                    </label>
-
-                    {/* 5. EC */}
-                    <label className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-slate-50 transition-colors select-none">
-                      <input
-                        type="checkbox"
-                        checked={params.ec}
-                        onChange={() => toggleParam('ec')}
-                        className="w-3.5 h-3.5 rounded text-cyan-600 focus:ring-cyan-500 cursor-pointer"
-                      />
-                      <span className="text-xs font-medium text-slate-800 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-cyan-600" />
-                        EC
-                      </span>
-                    </label>
+                    {/* Dynamic List of Available Parameters */}
+                    <div className="space-y-1">
+                      {availableParamKeys.map((key) => {
+                        const config = ALL_PARAM_CONFIGS[key];
+                        if (!config) return null;
+                        return (
+                          <label
+                            key={key}
+                            className="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50 transition-colors select-none"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!params[key]}
+                              onChange={() => toggleParam(key)}
+                              className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                            <span className="text-xs font-medium text-slate-800 flex items-center justify-between flex-1">
+                              <span className="flex items-center gap-1.5">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: config.color }}
+                                />
+                                <span>{config.name}</span>
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {config.unit}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 </>
               )}
             </div>
 
-            {/* Direct Export CSV Button */}
-            <button
-              type="button"
-              onClick={handleExport}
-              className="btn-press px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs cursor-pointer shrink-0 flex items-center gap-1.5"
-              title="Export CSV Telemetry"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export</span>
-            </button>
           </div>
         </div>
       </div>
@@ -1222,187 +1797,73 @@ export const MonitoringTab: React.FC = () => {
       {/* 3. Parameter Trends / Benchmark Chart (Full Width, Changes with Visualization Mode) */}
       <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-xs flex flex-col justify-between">
         <div>
-          {/* Header with Title */}
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <h2 className="text-sm font-bold text-[#0A1628]">
-              Live Telemetry
-            </h2>
+          {/* Header with Title, Timestamp & Stream Reach Pill */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-3">
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+              <h2 className="text-sm font-bold text-[#0A1628]">
+                {visualizationMode === 'timeseries' ? 'Live Telemetry' : 'Sensor Readings (Current Telemetry)'}
+              </h2>
+              {visualizationMode === 'standard' && (
+                <span className="text-xs text-slate-500 font-sans">
+                  {selectedDate}, {currentTimeString}
+                </span>
+              )}
+              {!isStationaryNode ? (
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${selectedStream === 'Upstream' ? 'bg-sky-50 text-sky-700 border-sky-200' :
+                    selectedStream === 'Dosing' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                      'bg-indigo-50 text-indigo-700 border-indigo-200'
+                  }`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                  Stream Reach: <strong>{selectedStream}</strong>
+                  {selectedStream === 'Upstream' && ' • Baseline Reference'}
+                  {selectedStream === 'Dosing' && ' • Active Plume Dynamics'}
+                  {selectedStream === 'Downstream' && ' • CO₂ Ingress & Transport'}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                  Stationary MRV Buoy Node • In-situ Sensor Telemetry
+                </span>
+              )}
+            </div>
+            {visualizationMode === 'timeseries' && (
+              <div className="flex items-center gap-2.5 sm:gap-3 flex-nowrap shrink-0 ml-auto">
+                {/* Interactive Graph Legend positioned strictly to the left of the Zoom indicator */}
+                <div className="bg-slate-50/90 border border-slate-200/80 px-2 py-0.5 rounded-lg flex items-center gap-x-1.5 text-[10.5px] font-sans shadow-2xs shrink-0 max-w-full overflow-x-auto">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mr-0.5 shrink-0">Legend</span>
+                  {activeVisibleParams.map((p) => {
+                    const isHovered = hoveredParamKey === p.key;
+                    return (
+                      <div
+                        key={p.key}
+                        onMouseEnter={() => setHoveredParamKey(p.key)}
+                        onMouseLeave={() => setHoveredParamKey(null)}
+                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-all cursor-pointer shrink-0 ${
+                          isHovered ? 'bg-white ring-1 ring-slate-300 font-bold shadow-xs' : 'hover:bg-white/60'
+                        }`}
+                        title={`${p.name} (${p.unit})`}
+                      >
+                        <span className="w-2 h-1.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                        <span className="text-slate-700 text-[10px] font-medium whitespace-nowrap">{p.shortLabel}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono shrink-0 whitespace-nowrap">
+                  <span>Zoom: {getZoomSpanDescription()}</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* SVG Chart: Changes dynamically based on visualizationMode */}
-          <div
-            ref={chartContainerRef}
-            className="relative w-full overflow-hidden bg-white rounded-lg select-none h-64 sm:h-72 transition-all duration-300"
-            style={{ touchAction: 'none', overscrollBehavior: 'contain' }}
-          >
-            {visualizationMode === 'standard' ? (
-              /* ================= MODE 1: STANDARD BENCHMARK & REGULATORY COMPLIANCE CHART ================= */
-              <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full overflow-visible">
-                {/* Horizontal Standard Benchmark Gridlines (0%, 25%, 50%, 75%, 100%, 125%, 150%) */}
-                {[0, 25, 50, 75, 100, 125, 150].map((pct) => {
-                  const y = padding.top + ((150 - pct) / 150) * innerHeight;
-                  const is100 = pct === 100;
-                  return (
-                    <g key={pct}>
-                      <line
-                        x1={padding.left}
-                        y1={y}
-                        x2={chartWidth - padding.right}
-                        y2={y}
-                        stroke={is100 ? '#0284C7' : '#F1F5F9'}
-                        strokeWidth={is100 ? '1.5' : '1'}
-                        strokeDasharray={is100 ? '4,4' : undefined}
-                      />
-                      <text
-                        x={padding.left - 8}
-                        y={y + 3.5}
-                        textAnchor="end"
-                        fontSize="9.5"
-                        fill={is100 ? '#0284C7' : '#64748B'}
-                        fontWeight={is100 ? 'bold' : 'normal'}
-                        fontFamily="Inter, sans-serif"
-                      >
-                        {pct}%
-                      </text>
-                    </g>
-                  );
-                })}
-
-                {/* Left Axis Title */}
-                <text
-                  x={12}
-                  y={chartHeight / 2}
-                  textAnchor="middle"
-                  fontSize="9.5"
-                  fill="#64748B"
-                  transform={`rotate(-90 12 ${chartHeight / 2})`}
-                  fontFamily="Inter, sans-serif"
-                >
-                  % of Regulatory Standard Baseline
-                </text>
-
-                {/* Shaded Safe Operating Envelope Band (80% to 120%) */}
-                <rect
-                  x={padding.left}
-                  y={padding.top + ((150 - 120) / 150) * innerHeight}
-                  width={innerWidth}
-                  height={((120 - 80) / 150) * innerHeight}
-                  fill="#ECFDF5"
-                  fillOpacity="0.45"
-                  stroke="#A7F3D0"
-                  strokeDasharray="4,4"
-                  strokeWidth="1"
-                />
-                <text
-                  x={chartWidth - padding.right - 8}
-                  y={padding.top + ((150 - 120) / 150) * innerHeight + 14}
-                  textAnchor="end"
-                  fontSize="8.5"
-                  fill="#059669"
-                  fontWeight="bold"
-                >
-                  Safe Tolerance Envelope (80% – 120% of Target Baseline)
-                </text>
-
-                {/* 100% Target Standard Tag */}
-                <g transform={`translate(${padding.left + 8}, ${padding.top + ((150 - 100) / 150) * innerHeight - 6})`}>
-                  <rect x="0" y="-10" width="138" height="14" rx="3" fill="#E0F2FE" />
-                  <text x="6" y="1" fontSize="8" fontWeight="bold" fill="#0369A1">
-                    ★ 100% Regulatory Standard Baseline
-                  </text>
-                </g>
-
-                {/* Grouped Comparative Columns for Active Parameters */}
-                {standardMetrics.map((metric, idx) => {
-                  const N = Math.max(1, standardMetrics.length);
-                  const colSpacing = innerWidth / N;
-                  const centerX = padding.left + (idx + 0.5) * colSpacing;
-                  const barWidth = Math.min(36, colSpacing * 0.28);
-
-                  const targetY = padding.top + ((150 - 100) / 150) * innerHeight;
-                  const targetHeight = (100 / 150) * innerHeight;
-
-                  const measuredPct = metric.normalizedMeasured;
-                  const measuredY = padding.top + ((150 - measuredPct) / 150) * innerHeight;
-                  const measuredHeight = Math.max(4, (measuredPct / 150) * innerHeight);
-
-                  return (
-                    <g key={metric.id}>
-                      {/* Bar 1: Regulatory Standard Baseline (Target = 100%) */}
-                      <rect
-                        x={centerX - barWidth - 4}
-                        y={targetY}
-                        width={barWidth}
-                        height={targetHeight}
-                        fill="#E2E8F0"
-                        stroke="#CBD5E1"
-                        strokeWidth="1"
-                        rx="4"
-                      />
-
-                      {/* Bar 2: Current Measured Value */}
-                      <rect
-                        x={centerX + 4}
-                        y={measuredY}
-                        width={barWidth}
-                        height={measuredHeight}
-                        fill={metric.color}
-                        rx="4"
-                      />
-
-                      {/* Floating Measured Value Pill on top */}
-                      <g transform={`translate(${centerX + 4 + barWidth / 2}, ${measuredY - 8})`}>
-                        <rect
-                          x="-32"
-                          y="-14"
-                          width="64"
-                          height="16"
-                          rx="4"
-                          fill="#0F172A"
-                          stroke={metric.color}
-                          strokeWidth="1.5"
-                        />
-                        <text
-                          textAnchor="middle"
-                          y="-3"
-                          fontSize="8.5"
-                          fontWeight="bold"
-                          fill="#FFFFFF"
-                          fontFamily="Inter, sans-serif"
-                        >
-                          {metric.measured} {metric.unit}
-                        </text>
-                      </g>
-
-                      {/* X-Axis Parameter Name & Status */}
-                      <text
-                        x={centerX}
-                        y={chartHeight - 20}
-                        textAnchor="middle"
-                        fontSize="10"
-                        fontWeight="bold"
-                        fill="#1E293B"
-                        fontFamily="Inter, sans-serif"
-                      >
-                        {metric.name}
-                      </text>
-                      <text
-                        x={centerX}
-                        y={chartHeight - 7}
-                        textAnchor="middle"
-                        fontSize="8.5"
-                        fontWeight="bold"
-                        fill={metric.color}
-                        fontFamily="Inter, sans-serif"
-                      >
-                        {metric.status} ({metric.deltaText})
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
-            ) : (
-              /* ================= MODE 2: TIME-SERIES INTERACTIVE TELEMETRY CHART ================= */
+          {visualizationMode === 'timeseries' ? (
+            /* ================= MODE 2: TIME-SERIES INTERACTIVE TELEMETRY CHART ================= */
+            <div
+              ref={chartContainerRef}
+              className="relative w-full overflow-hidden bg-white rounded-lg select-none h-64 sm:h-72 transition-all duration-300"
+              style={{ touchAction: 'none', overscrollBehavior: 'contain' }}
+            >
               <svg
                 viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                 className="w-full h-full overflow-visible select-none cursor-crosshair"
@@ -1413,173 +1874,31 @@ export const MonitoringTab: React.FC = () => {
                 onDoubleClick={() => handleZoomByFactor(0.5)}
               >
                 <defs>
-                  {/* Soft area gradient fill for pH curve */}
-                  <linearGradient id="phFillGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0284C7" stopOpacity="0.22" />
+                  <linearGradient id="curveGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#0284C7" stopOpacity="0.15" />
                     <stop offset="100%" stopColor="#0284C7" stopOpacity="0.0" />
-                  </linearGradient>
-                  {/* Soft area gradient fill for pCO2 curve */}
-                  <linearGradient id="pco2FillGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10B981" stopOpacity="0.18" />
-                    <stop offset="100%" stopColor="#10B981" stopOpacity="0.0" />
                   </linearGradient>
                 </defs>
 
-                {/* Left Y-Axis Gridlines & Labels */}
-                {(focusedParam === 'all' || focusedParam === 'ph') &&
-                  [7.0, 8.0, 9.0, 10.0, 11.0].map((val) => (
-                    <g key={`ph-grid-${val}`}>
-                      <line
-                        x1={padding.left}
-                        y1={getYPh(val)}
-                        x2={chartWidth - padding.right}
-                        y2={getYPh(val)}
-                        stroke={val === 8.0 ? '#BAE6FD' : '#F1F5F9'}
-                        strokeWidth={val === 8.0 ? '1.5' : '1'}
-                        strokeDasharray={val === 8.0 ? '4,4' : undefined}
-                      />
-                      <text
-                        x={padding.left - 8}
-                        y={getYPh(val) + 3}
-                        textAnchor="end"
-                        fontSize="9.5"
-                        fill={val === 8.0 ? '#0284C7' : '#64748B'}
-                        fontWeight={val === 8.0 ? 'bold' : 'normal'}
-                        fontFamily="Inter, sans-serif"
-                      >
-                        {val.toFixed(1)} {val === 8.0 ? '★' : ''}
-                      </text>
-                    </g>
-                  ))}
+                {/* Subtle Horizontal Reference Gridlines (Clean & Uncluttered, No pH/pCO2 titles) */}
+                {[0.2, 0.4, 0.6, 0.8].map((ratio) => {
+                  const y = padding.top + ratio * innerHeight;
+                  return (
+                    <line
+                      key={`grid-${ratio}`}
+                      x1={padding.left}
+                      y1={y}
+                      x2={chartWidth - padding.right}
+                      y2={y}
+                      stroke="#F1F5F9"
+                      strokeWidth="1"
+                      strokeDasharray="4,4"
+                    />
+                  );
+                })}
 
-                {focusedParam === 'pco2' &&
-                  [1800, 2200, 2600, 3000].map((val) => (
-                    <g key={`pco2-grid-${val}`}>
-                      <line
-                        x1={padding.left}
-                        y1={getYPco2(val)}
-                        x2={chartWidth - padding.right}
-                        y2={getYPco2(val)}
-                        stroke="#F1F5F9"
-                        strokeWidth="1"
-                      />
-                      <text
-                        x={padding.left - 8}
-                        y={getYPco2(val) + 3}
-                        textAnchor="end"
-                        fontSize="9.5"
-                        fill="#059669"
-                        fontFamily="Inter, sans-serif"
-                      >
-                        {val}
-                      </text>
-                    </g>
-                  ))}
-
-                {focusedParam === 'do' &&
-                  [3.5, 4.5, 5.5, 6.5].map((val) => (
-                    <g key={`do-grid-${val}`}>
-                      <line
-                        x1={padding.left}
-                        y1={getYDo(val)}
-                        x2={chartWidth - padding.right}
-                        y2={getYDo(val)}
-                        stroke="#F1F5F9"
-                        strokeWidth="1"
-                      />
-                      <text
-                        x={padding.left - 8}
-                        y={getYDo(val) + 3}
-                        textAnchor="end"
-                        fontSize="9.5"
-                        fill="#7C3AED"
-                        fontFamily="Inter, sans-serif"
-                      >
-                        {val.toFixed(1)}
-                      </text>
-                    </g>
-                  ))}
-
-                {focusedParam === 'temp' &&
-                  [25.0, 26.0, 27.0, 28.0, 29.0].map((val) => (
-                    <g key={`temp-grid-${val}`}>
-                      <line
-                        x1={padding.left}
-                        y1={getYTemp(val)}
-                        x2={chartWidth - padding.right}
-                        y2={getYTemp(val)}
-                        stroke="#F1F5F9"
-                        strokeWidth="1"
-                      />
-                      <text
-                        x={padding.left - 8}
-                        y={getYTemp(val) + 3}
-                        textAnchor="end"
-                        fontSize="9.5"
-                        fill="#D97706"
-                        fontFamily="Inter, sans-serif"
-                      >
-                        {val.toFixed(1)}°
-                      </text>
-                    </g>
-                  ))}
-
-                {/* Right Y-Axis Labels for pCO2 when All Parameters is active */}
-                {focusedParam === 'all' &&
-                  [1800, 2200, 2600, 3000].map((tick) => (
-                    <text
-                      key={`right-${tick}`}
-                      x={chartWidth - padding.right + 8}
-                      y={getYPco2(tick) + 3}
-                      textAnchor="start"
-                      fontSize="9"
-                      fill="#059669"
-                      fontFamily="Inter, sans-serif"
-                    >
-                      {tick}
-                    </text>
-                  ))}
-
-                {/* Left Axis Title */}
-                <text
-                  x={14}
-                  y={chartHeight / 2}
-                  textAnchor="middle"
-                  fontSize="9.5"
-                  fontWeight="bold"
-                  fill="#475569"
-                  transform={`rotate(-90 14 ${chartHeight / 2})`}
-                  fontFamily="Inter, sans-serif"
-                >
-                  {focusedParam === 'all'
-                    ? 'pH Buffer'
-                    : focusedParam === 'ph'
-                    ? 'pH Buffer Level'
-                    : focusedParam === 'pco2'
-                    ? 'pCO₂ Drawdown (µatm)'
-                    : focusedParam === 'do'
-                    ? 'Dissolved Oxygen (mg/L)'
-                    : 'Water Temp (°C)'}
-                </text>
-
-                {/* Right Axis Title (when All Parameters active) */}
-                {focusedParam === 'all' && (
-                  <text
-                    x={chartWidth - 10}
-                    y={chartHeight / 2}
-                    textAnchor="middle"
-                    fontSize="9.5"
-                    fontWeight="bold"
-                    fill="#059669"
-                    transform={`rotate(90 ${chartWidth - 10} ${chartHeight / 2})`}
-                    fontFamily="Inter, sans-serif"
-                  >
-                    pCO₂ (µatm)
-                  </text>
-                )}
-
-                {/* Dosing Window 1 Highlighted Shaded Column (06:00 to 09:00) */}
-                {isC1Visible && (
+                {/* Dosing Windows (Shown for Mobile Vessels) */}
+                {!isStationaryNode && isC1Visible && (
                   <g>
                     <rect
                       x={c1StartX}
@@ -1587,7 +1906,7 @@ export const MonitoringTab: React.FC = () => {
                       width={c1EndX - c1StartX}
                       height={innerHeight}
                       fill="#E0F2FE"
-                      fillOpacity="0.45"
+                      fillOpacity="0.35"
                       stroke="#7DD3FC"
                       strokeDasharray="4,4"
                       strokeWidth="1"
@@ -1615,8 +1934,7 @@ export const MonitoringTab: React.FC = () => {
                   </g>
                 )}
 
-                {/* Dosing Window 2 Highlighted Shaded Column (15:00 to 18:00) */}
-                {isC2Visible && (
+                {!isStationaryNode && isC2Visible && (
                   <g>
                     <rect
                       x={c2StartX}
@@ -1624,7 +1942,7 @@ export const MonitoringTab: React.FC = () => {
                       width={c2EndX - c2StartX}
                       height={innerHeight}
                       fill="#E0F2FE"
-                      fillOpacity="0.45"
+                      fillOpacity="0.35"
                       stroke="#7DD3FC"
                       strokeDasharray="4,4"
                       strokeWidth="1"
@@ -1677,62 +1995,39 @@ export const MonitoringTab: React.FC = () => {
                   </g>
                 ))}
 
-                {/* Area Gradient Fills */}
-                {(focusedParam === 'all' || focusedParam === 'ph') && (
-                  <path d={phAreaPathStr} fill="url(#phFillGradient)" />
-                )}
-                {focusedParam === 'pco2' && (
-                  <path d={pco2AreaPathStr} fill="url(#pco2FillGradient)" />
-                )}
+                {/* Dynamic Active Parameter Curves */}
+                {activeVisibleParams.map((param) => {
+                  const pointsStr = polylinePointsMap[param.key];
+                  if (!pointsStr) return null;
+                  const isHovered = hoveredParamKey === param.key;
+                  const isDimmed = hoveredParamKey !== null && !isHovered;
 
-                {/* Dynamic Curves with expressive vertical shape */}
-                {/* 1. Temperature Curve (Orange) */}
-                {(focusedParam === 'all' || focusedParam === 'temp') && params.temperature && (
-                  <polyline
-                    points={denseTempPointsStr}
-                    fill="none"
-                    stroke="#F97316"
-                    strokeWidth={focusedParam === 'temp' ? '2.5' : '2'}
-                    strokeOpacity={focusedParam === 'all' || focusedParam === 'temp' ? 1 : 0.25}
-                    strokeLinecap="round"
-                  />
-                )}
-
-                {/* 2. DO Curve (Purple) */}
-                {(focusedParam === 'all' || focusedParam === 'do') && params.do && (
-                  <polyline
-                    points={denseDoPointsStr}
-                    fill="none"
-                    stroke="#8B5CF6"
-                    strokeWidth={focusedParam === 'do' ? '2.5' : '2'}
-                    strokeOpacity={focusedParam === 'all' || focusedParam === 'do' ? 1 : 0.25}
-                    strokeLinecap="round"
-                  />
-                )}
-
-                {/* 3. pCO2 Curve (Green) */}
-                {(focusedParam === 'all' || focusedParam === 'pco2') && params.pco2 && (
-                  <polyline
-                    points={densePco2PointsStr}
-                    fill="none"
-                    stroke="#10B981"
-                    strokeWidth={focusedParam === 'pco2' ? '2.5' : '2'}
-                    strokeOpacity={focusedParam === 'all' || focusedParam === 'pco2' ? 1 : 0.25}
-                    strokeLinecap="round"
-                  />
-                )}
-
-                {/* 4. pH Curve (Blue) */}
-                {(focusedParam === 'all' || focusedParam === 'ph') && params.ph && (
-                  <polyline
-                    points={densePhPointsStr}
-                    fill="none"
-                    stroke="#0284C7"
-                    strokeWidth={focusedParam === 'ph' ? '3' : '2.5'}
-                    strokeOpacity={focusedParam === 'all' || focusedParam === 'ph' ? 1 : 0.25}
-                    strokeLinecap="round"
-                  />
-                )}
+                  return (
+                    <g key={`curve-group-${param.key}`}>
+                      {/* Visual Line */}
+                      <polyline
+                        points={pointsStr}
+                        fill="none"
+                        stroke={param.color}
+                        strokeWidth={isHovered ? 3.5 : 2.2}
+                        strokeOpacity={isDimmed ? 0.2 : 0.95}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="transition-all duration-150 pointer-events-none"
+                      />
+                      {/* Invisible wider hitbox for easy cursor detection */}
+                      <polyline
+                        points={pointsStr}
+                        fill="none"
+                        stroke="transparent"
+                        strokeWidth={18}
+                        className="cursor-pointer"
+                        onMouseEnter={() => setHoveredParamKey(param.key)}
+                        onMouseLeave={() => setHoveredParamKey(null)}
+                      />
+                    </g>
+                  );
+                })}
 
                 {/* Sample nodes when zoomed */}
                 {denseSampledPoints
@@ -1745,18 +2040,23 @@ export const MonitoringTab: React.FC = () => {
                   })
                   .map((p) => (
                     <g key={`nodes-${p.sec}`}>
-                      {(focusedParam === 'all' || focusedParam === 'ph') && params.ph && (
-                        <circle cx={p.x} cy={p.yPh} r="2.5" fill="#0284C7" stroke="#FFFFFF" strokeWidth="1" />
-                      )}
-                      {(focusedParam === 'all' || focusedParam === 'pco2') && params.pco2 && (
-                        <circle cx={p.x} cy={p.yPco2} r="2.5" fill="#10B981" stroke="#FFFFFF" strokeWidth="1" />
-                      )}
-                      {(focusedParam === 'all' || focusedParam === 'do') && params.do && (
-                        <circle cx={p.x} cy={p.yDo} r="2.5" fill="#8B5CF6" stroke="#FFFFFF" strokeWidth="1" />
-                      )}
-                      {(focusedParam === 'all' || focusedParam === 'temp') && params.temperature && (
-                        <circle cx={p.x} cy={p.yTemp} r="2.5" fill="#F97316" stroke="#FFFFFF" strokeWidth="1" />
-                      )}
+                      {activeVisibleParams.map((param) => {
+                        const val = (p.telem as any)[param.key === 'temperature' ? 'temp' : param.key] ?? 0;
+                        const y = getYForParam(param.key, val);
+                        const isHovered = hoveredParamKey === param.key;
+                        return (
+                          <circle
+                            key={`node-${param.key}-${p.sec}`}
+                            cx={p.x}
+                            cy={y}
+                            r={isHovered ? 3.5 : 2}
+                            fill={param.color}
+                            stroke="#FFFFFF"
+                            strokeWidth="1"
+                            opacity={hoveredParamKey && !isHovered ? 0.2 : 0.9}
+                          />
+                        );
+                      })}
                     </g>
                   ))}
 
@@ -1780,253 +2080,188 @@ export const MonitoringTab: React.FC = () => {
                         {formatSecondsToClock(hoverCursor.sec, true)}
                       </text>
                     </g>
-                    {/* Floating Precision Telemetry HUD Card */}
-                    <g
-                      transform={`translate(${
-                        hoverCursor.x > chartWidth - 170 ? hoverCursor.x - 165 : hoverCursor.x + 10
-                      }, ${padding.top + 6})`}
-                    >
-                      <rect
-                        x="0"
-                        y="0"
-                        width="155"
-                        height="68"
-                        rx="6"
-                        fill="#0F172A"
-                        fillOpacity="0.95"
-                        stroke="#334155"
-                        strokeWidth="1"
-                      />
-                      <text x="8" y="14" fontSize="8.5" fontWeight="bold" fill="#94A3B8" fontFamily="monospace">
-                        ⏱ {formatSecondsToClock(hoverCursor.sec, true)}
-                      </text>
-                      <text x="8" y="28" fontSize="8.5" fontWeight="bold" fill="#38BDF8">
-                        pH Level: {hoverCursor.telem.ph.toFixed(2)}
-                      </text>
-                      <text x="8" y="41" fontSize="8.5" fontWeight="bold" fill="#34D399">
-                        pCO₂: {hoverCursor.telem.pco2} µatm
-                      </text>
-                      <text x="8" y="54" fontSize="8.5" fontWeight="bold" fill="#A78BFA">
-                        DO: {hoverCursor.telem.do.toFixed(2)} mg/L
-                      </text>
-                      <text x="84" y="54" fontSize="8.5" fontWeight="bold" fill="#FBBF24">
-                        Temp: {hoverCursor.telem.temp.toFixed(1)}°C
-                      </text>
-                    </g>
+                    {/* Dynamic Tooltip HUD Card */}
+                    {(() => {
+                      if (hoveredParamKey && ALL_PARAM_CONFIGS[hoveredParamKey]) {
+                        const p = ALL_PARAM_CONFIGS[hoveredParamKey];
+                        const rawVal = (hoverCursor.telem as any)[p.key === 'temperature' ? 'temp' : p.key];
+                        const formattedVal = typeof rawVal === 'number' ? (rawVal % 1 === 0 ? rawVal : rawVal.toFixed(2)) : rawVal ?? '--';
+                        const cardW = 165;
+                        const cardH = 48;
+                        const posX = hoverCursor.x > chartWidth - cardW - 20 ? hoverCursor.x - cardW - 10 : hoverCursor.x + 10;
+
+                        return (
+                          <g transform={`translate(${posX}, ${padding.top + 4})`}>
+                            <rect
+                              x="0"
+                              y="0"
+                              width={cardW}
+                              height={cardH}
+                              rx="6"
+                              fill="#0F172A"
+                              fillOpacity="0.96"
+                              stroke={p.color}
+                              strokeWidth="1.5"
+                            />
+                            <text x="8" y="14" fontSize="8.5" fontWeight="bold" fill="#94A3B8" fontFamily="monospace">
+                              ⏱ {formatSecondsToClock(hoverCursor.sec, true)} • Parameter Focus
+                            </text>
+                            <circle cx="12" cy="28" r="3.5" fill={p.color} />
+                            <text x="20" y="32" fontSize="10.5" fontWeight="bold" fill="#FFFFFF" fontFamily="Inter, sans-serif">
+                              {p.name}: <tspan fill={p.color}>{formattedVal} {p.unit}</tspan>
+                            </text>
+                          </g>
+                        );
+                      }
+
+                      // Generic cursor: Show ONLY the active parameters selected in the filter
+                      const cols = activeVisibleParams.length > 4 ? 2 : 1;
+                      const rowCount = Math.ceil(activeVisibleParams.length / cols);
+                      const cardW = cols === 2 ? 220 : 160;
+                      const cardH = Math.max(48, 24 + rowCount * 17);
+                      const posX = hoverCursor.x > chartWidth - cardW - 20 ? hoverCursor.x - cardW - 10 : hoverCursor.x + 10;
+
+                      return (
+                        <g transform={`translate(${posX}, ${padding.top + 4})`}>
+                          <rect
+                            x="0"
+                            y="0"
+                            width={cardW}
+                            height={cardH}
+                            rx="6"
+                            fill="#0F172A"
+                            fillOpacity="0.96"
+                            stroke="#334155"
+                            strokeWidth="1"
+                          />
+                          <text x="8" y="14" fontSize="8.5" fontWeight="bold" fill="#94A3B8" fontFamily="monospace">
+                            ⏱ {formatSecondsToClock(hoverCursor.sec, true)} • {isStationaryNode ? 'Station' : selectedStream}
+                          </text>
+                          {activeVisibleParams.map((p, idx) => {
+                            const col = cols === 2 ? idx % 2 : 0;
+                            const row = cols === 2 ? Math.floor(idx / 2) : idx;
+                            const itemX = col === 0 ? 8 : 115;
+                            const itemY = 28 + row * 17;
+                            const rawVal = (hoverCursor.telem as any)[p.key === 'temperature' ? 'temp' : p.key];
+                            const formattedVal = typeof rawVal === 'number' ? (rawVal % 1 === 0 ? rawVal : rawVal.toFixed(1)) : rawVal ?? '--';
+
+                            return (
+                              <g key={`hud-${p.key}`}>
+                                <circle cx={itemX + 3} cy={itemY - 3} r="2.5" fill={p.color} />
+                                <text x={itemX + 9} y={itemY} fontSize="8.5" fontWeight="bold" fill="#F8FAFC" fontFamily="Inter, sans-serif">
+                                  {p.shortLabel}: <tspan fill={p.color}>{formattedVal}</tspan>{' '}
+                                  <tspan fill="#64748B" fontSize="7.5">{p.unit}</tspan>
+                                </text>
+                              </g>
+                            );
+                          })}
+                        </g>
+                      );
+                    })()}
                   </g>
                 )}
               </svg>
-            )}
-          </div>
+            </div>
+          ) : (
+            /* ================= MODE 1: STANDARD SENSOR READINGS (MATCHES USER SCREENSHOT) ================= */
+            <div className="pt-1">
+              {renderSensorReadingsCards()}
+            </div>
+          )}
         </div>
-
 
       </div>
 
-      {/* 4. On Below: Asset Map / Location (24 hrs) (Full Width) */}
-      <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-          <div>
-            <h2 className="text-sm font-bold text-[#0A1628]">
-              Asset Location
-            </h2>
-          </div>
-        </div>
-
-        {/* Live Synchronized Asset Satellite Map */}
-        <MonitoringAssetMap
-          progressRatio={scrubberProgress}
-          mapType={mapType}
-          onMapTypeChange={setMapType}
-          assetName={selectedAsset}
-        />
-      </div>
-
-      {/* 5. Bottom Section: Sensor Readings (Left) + Notifications & Alerts (Right) */}
+      {/* 4. Side-by-Side: Asset Location (Left) + Notifications & Alerts (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-        {/* Left: Sensor Readings (Selected Time) */}
+        {/* Left Side: Asset Location Map (lg:col-span-8) */}
         <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200/90 p-4 shadow-xs flex flex-col justify-between">
           <div>
-            {/* Header with Title & Current Timestamp */}
-            <div className="mb-3">
-              <h2 className="text-sm font-bold text-[#0A1628]">
-                Sensor Readings (Current Telemetry)
-              </h2>
-              <p className="text-xs text-slate-500">
-                {selectedDate}, {currentTimeString}
-              </p>
-            </div>
-
-            {/* 6 Metric Cards Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-              {/* Card 1: pH */}
-              <div className="p-3 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE]/60 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">
-                    <Droplets className="w-3 h-3" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-700">pH</span>
-                </div>
-                <div className="my-1">
-                  <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
-                    {currentPh}
-                  </div>
-                </div>
-                <div className="mt-1 flex flex-col gap-0.5">
-                  <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold self-start">
-                    Normal
-                  </span>
-                  <span className="text-[9.5px] text-slate-500 font-mono mt-0.5">
-                    (6.5 – 8.5)
-                  </span>
-                </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-sm font-bold text-[#0A1628]">
+                  Asset Location
+                </h2>
+                <span className="text-[11px] font-mono text-slate-400">
+                  Live 24h Route • In-situ Reach
+                </span>
               </div>
-
-              {/* Card 2: pCO2 */}
-              <div className="p-3 rounded-lg bg-[#ECFDF5] border border-[#A7F3D0]/60 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">
-                    <Wind className="w-3 h-3" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-700">pCO₂</span>
-                </div>
-                <div className="my-1">
-                  <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
-                    {currentPco2}
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-500 block mt-0.5">µatm</span>
-                </div>
-                <div className="mt-1">
-                  <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                    Normal
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 3: DO */}
-              <div className="p-3 rounded-lg bg-[#F5F3FF] border border-[#DDD6FE]/60 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">
-                    <Activity className="w-3 h-3" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-700">DO</span>
-                </div>
-                <div className="my-1">
-                  <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
-                    {currentDo}
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-500 block mt-0.5">mg/L</span>
-                </div>
-                <div className="mt-1">
-                  <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                    Normal
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 4: Temperature */}
-              <div className="p-3 rounded-lg bg-[#FFF7ED] border border-[#FED7AA]/60 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px]">
-                    <Thermometer className="w-3 h-3" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-700 truncate">Temperature</span>
-                </div>
-                <div className="my-1">
-                  <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
-                    {currentTemp}
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-500 block mt-0.5">°C</span>
-                </div>
-                <div className="mt-1">
-                  <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                    Normal
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 5: EC */}
-              <div className="p-3 rounded-lg bg-[#F0FDF4] border border-[#BAE6FD]/60 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-5 h-5 rounded-full bg-cyan-600 text-white flex items-center justify-center text-[10px]">
-                    <Zap className="w-3 h-3" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-700">EC</span>
-                </div>
-                <div className="my-1">
-                  <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
-                    {currentAssetData.baseEc}
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-500 block mt-0.5">µS/cm</span>
-                </div>
-                <div className="mt-1">
-                  <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                    Normal
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 6: Turbidity */}
-              <div className="p-3 rounded-lg bg-[#FFFBEB] border border-[#FDE68A]/60 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-5 h-5 rounded-full bg-amber-700 text-white flex items-center justify-center text-[10px]">
-                    <Waves className="w-3 h-3" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-700 truncate">Turbidity</span>
-                </div>
-                <div className="my-1">
-                  <div className="text-2xl font-black text-slate-900 tracking-tight leading-none font-sans">
-                    {currentAssetData.baseTurbidity}
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-500 block mt-0.5">NTU</span>
-                </div>
-                <div className="mt-1">
-                  <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                    Normal
-                  </span>
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  GPS Tracking Active
+                </span>
               </div>
             </div>
+
+            {/* Live Synchronized Asset Satellite Map */}
+            <MonitoringAssetMap
+              progressRatio={scrubberProgress}
+              mapType={mapType}
+              onMapTypeChange={setMapType}
+              assetName={selectedAsset}
+            />
           </div>
         </div>
 
-        {/* Right: Notifications & Alerts */}
+        {/* Right Side: Notifications & Alerts (lg:col-span-4) */}
         <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200/90 p-4 shadow-xs flex flex-col justify-between">
-          <div>
-            {/* Header with Title & View All */}
-            <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
-              <h2 className="text-sm font-bold text-[#0A1628]">
-                Notifications & Alerts
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowAllAlertsModal(true)}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-              >
-                View All
-              </button>
+          <div className="flex-1 flex flex-col justify-between">
+            <div>
+              {/* Header with Title & View All */}
+              <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-[#0A1628]">
+                    Notifications & Alerts
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-slate-100 text-slate-600">
+                    {assetAlerts.length}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAllAlertsModal(true)}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                >
+                  View All
+                </button>
+              </div>
+
+              {/* Alert Items matching selected asset in vertical stack */}
+              <div className="space-y-2.5">
+                {assetAlerts.slice(0, 4).map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="p-3 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-slate-50/90 transition-colors flex items-start gap-3"
+                  >
+                    {renderAlertIcon(alert.type)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <h3 className={`text-xs font-bold ${getAlertTitleColor(alert.type)} truncate`}>
+                          {alert.title}
+                        </h3>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                          {alert.time}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        {alert.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* Alert Items matching selected asset */}
-            <div className="space-y-2.5">
-              {assetAlerts.slice(0, 4).map((alert) => (
-                <div key={alert.id} className="flex items-start gap-2.5">
-                  {renderAlertIcon(alert.type)}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <h3 className={`text-xs font-bold ${getAlertTitleColor(alert.type)} truncate`}>
-                        {alert.title}
-                      </h3>
-                      <span className="text-[10px] font-mono text-slate-400 shrink-0">
-                        {alert.time}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-tight">
-                      {alert.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
+            {/* Structured Card Footer */}
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-sans">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Telemetry Sentinel
+              </span>
+              <span className="font-mono text-[10px]">
+                Auto-sync 1s
+              </span>
             </div>
           </div>
         </div>

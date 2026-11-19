@@ -222,6 +222,16 @@ export const MonitoringAssetMap: React.FC<MonitoringAssetMapProps> = ({
       setTimeout(() => {
         map.invalidateSize();
       }, 150);
+
+      // Auto-invalidate size on container width/height change
+      if (typeof ResizeObserver !== 'undefined' && mapContainerRef.current) {
+        const ro = new ResizeObserver(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+          }
+        });
+        ro.observe(mapContainerRef.current);
+      }
     }
 
     return () => {
